@@ -1,13 +1,14 @@
 {
-  "name": "websocket",
+  "name": "websocket-ai-chat-rpg",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "WebSocket Chat RPG con bots de IA multi-personalidad",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "server": "node server/server.js",
+    "rpg": "node bots/ai-rpg.js",
+    "chatroom": "node bots/ai-chatroom.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "Faalvare",
   "license": "ISC",
   "dependencies": {
     "ws": "^8.19.0"

@@ -1,1 +1,28 @@
 node_modules/
+package-lock.json
+
+# Environment secrets
+.env
+
+# Memories and runtime state
+ai-memories.json
+rpg-memories.json
+rpg-backstories.json
+
+# Discord chat exports
+dc_chat*.json
+dc_chat*.txt
+dc_chats/
+
+# Logs
+*.log
+
+# Temp files
+nul
+*.tmp
+*.bak
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
