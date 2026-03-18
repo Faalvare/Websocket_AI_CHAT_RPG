@@ -1,0 +1,2233 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebSocket RPG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/rpg-awesome@0.2.0/css/rpg-awesome.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #0d0d0d; color: #e0e0e0;
+      height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    i.ra { font-size: 1em; line-height: 1; vertical-align: middle; }
+
+    /* ── PANTALLAS ── */
+    .screen { display: none; flex-direction: column; height: 100vh; }
+    .screen.active { display: flex; }
+
+    /* ── LOGIN ── */
+    #screen-login {
+      align-items: center; justify-content: center; gap: 14px;
+      background: radial-gradient(ellipse at center, #1a1a2e 0%, #0d0d0d 70%);
+    }
+    #screen-login h1 { font-size: 2rem; color: #fff; letter-spacing: 1px; display: flex; align-items: center; gap: 12px; }
+    #screen-login h1 i.ra { font-size: 1.8rem; color: #7c3aed; }
+    #screen-login p  { color: #555; font-size: 0.9rem; }
+    #login-form { display: flex; gap: 8px; margin-top: 4px; }
+    #login-form input {
+      padding: 12px 18px; border: 1px solid #2a2a2a; border-radius: 12px;
+      background: #1a1a1a; color: #eee; font-size: 1rem; outline: none; width: 260px;
+      transition: border-color 0.2s;
+    }
+    #login-form input:focus { border-color: #7c3aed; }
+    .btn {
+      padding: 10px 20px; border: none; border-radius: 10px;
+      background: #7c3aed; color: #fff; font-size: 0.9rem;
+      font-weight: 600; cursor: pointer; transition: background 0.2s;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn:hover { background: #6d28d9; }
+    .btn.secondary { background: #1e1e1e; border: 1px solid #333; }
+    .btn.secondary:hover { background: #2a2a2a; }
+    .btn i.ra { font-size: 1rem; }
+    .gm-toggle { display: flex; align-items: center; gap: 8px; color: #666; font-size: 0.85rem; cursor: pointer; }
+    .gm-toggle input { accent-color: #f59e0b; width: 14px; height: 14px; }
+    .gm-toggle i.ra { color: #f59e0b; }
+
+    /* ── SELECCIÓN DE CLASE ── */
+    #screen-class {
+      align-items: center; justify-content: center; gap: 20px;
+      background: radial-gradient(ellipse at center, #1a1a2e 0%, #0d0d0d 70%);
+      padding: 20px;
+    }
+    #screen-class h2 { font-size: 1.4rem; color: #fff; }
+    #screen-class p  { color: #555; font-size: 0.85rem; }
+    .class-grid { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+    .class-card {
+      background: #141414; border: 1px solid #2a2a2a; border-radius: 16px;
+      padding: 20px; width: 210px; cursor: pointer;
+      transition: border-color 0.2s, transform 0.1s;
+    }
+    .class-card:hover { border-color: #7c3aed; transform: translateY(-2px); }
+    .class-card .class-icon { font-size: 2.4rem; margin-bottom: 10px; color: #7c3aed; }
+    .class-card .class-icon i.ra { font-size: 2.4rem; }
+    .class-card .class-name { font-weight: 600; color: #fff; margin-bottom: 8px; font-size: 1rem; }
+    .class-card .class-stats {
+      font-size: 0.72rem; color: #666; line-height: 1.9; margin-bottom: 10px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0 6px;
+    }
+    .class-card .stat-row { display: flex; align-items: center; gap: 5px; }
+    .class-card .stat-row i.ra { color: #555; font-size: 0.75rem; width: 12px; }
+    .class-card .class-skills { font-size: 0.72rem; line-height: 1.8; border-top: 1px solid #1e1e1e; padding-top: 8px; }
+    .class-card .skill-row { display: flex; align-items: center; gap: 6px; color: #888; }
+    .class-card .skill-row i.ra { color: #7c3aed; font-size: 0.8rem; width: 14px; }
+    .class-card .skill-name { color: #c4b5fd; min-width: 0; }
+    .class-card .skill-desc { color: #444; font-size: 0.66rem; }
+
+    /* ── LAYOUT PRINCIPAL ── */
+    #screen-chat { flex-direction: column; }
+
+    #header {
+      padding: 10px 20px; display: flex; align-items: center; gap: 12px;
+      border-bottom: 1px solid #1a1a1a; background: #111; min-height: 48px; flex-shrink: 0;
+    }
+    #header-phase {
+      font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 1.5px; padding: 3px 10px; border-radius: 20px;
+      background: rgba(124,58,237,0.2); color: #8b5cf6;
+      display: flex; align-items: center; gap: 5px;
+    }
+    #header-phase.combat { background: rgba(239,68,68,0.2); color: #f87171; }
+    #header-scenario {
+      flex: 1; font-size: 0.82rem; color: #aaa;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      display: flex; align-items: center; gap: 6px;
+    }
+    #header-scenario i.ra { color: #555; flex-shrink: 0; }
+    #header-users { font-size: 0.78rem; color: #555; display: flex; align-items: center; gap: 5px; }
+    #header-users i.ra { font-size: 0.8rem; }
+
+    #body { display: flex; flex: 1; min-height: 0; }
+
+    /* ── SIDEBAR JUGADORES ── */
+    #sidebar-left {
+      width: 195px; flex-shrink: 0; padding: 14px 12px;
+      border-right: 1px solid #1a1a1a; overflow-y: auto; background: #0f0f0f;
+    }
+    .sidebar-title {
+      font-size: 0.65rem; color: #444; text-transform: uppercase;
+      letter-spacing: 1.5px; font-weight: 600; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .sidebar-title i.ra { font-size: 0.75rem; }
+
+    .player-card {
+      background: #141414; border-radius: 10px; padding: 10px;
+      margin-bottom: 8px; border: 1px solid #1e1e1e;
+      transition: box-shadow 0.3s;
+    }
+    .player-card.current-turn { border-color: #f59e0b; }
+    .player-card.mine { border-color: #7c3aed44; }
+    .player-card.levelup-flash { animation: lvlFlash 0.8s ease; }
+    .player-card.offline { opacity: 0.45; filter: grayscale(0.7); border-color: #333; }
+    .offline-badge { font-size: 0.65rem; color: #6b7280; margin-left: 4px; }
+    .peek-inv-btn { font-size: 0.65rem; color: #7c3aed; background: none; border: none; cursor: pointer; padding: 2px 5px; border-radius: 4px; margin-top: 4px; display: block; }
+    .peek-inv-btn:hover { background: #1e1a2e; }
+    @keyframes lvlFlash {
+      0%   { box-shadow: 0 0 0 0 #fbbf2400; }
+      30%  { box-shadow: 0 0 16px 4px #fbbf24cc; }
+      100% { box-shadow: 0 0 0 0 #fbbf2400; }
+    }
+    .player-name {
+      font-size: 0.82rem; font-weight: 600; color: #ddd;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .player-name .class-ico { color: #7c3aed; font-size: 0.9rem; }
+    .player-name .turn-ico { color: #f59e0b; font-size: 0.7rem; margin-left: auto; }
+    .player-prefix { font-size: 0.62rem; color: #a78bfa; font-style: italic; font-weight: 400; }
+    .player-suffix { font-size: 0.62rem; color: #6b7280; font-style: italic; font-weight: 400; }
+    #title-popup { position: absolute; background: #0d0d14; border: 1px solid #333; border-radius: 8px; padding: 10px 12px; z-index: 50; display: flex; flex-direction: column; gap: 6px; min-width: 180px; box-shadow: 0 4px 16px #0008; }
+    #title-popup[hidden] { display: none !important; }
+    #title-popup input { background: #1a1a1a; border: 1px solid #333; border-radius: 5px; padding: 4px 8px; color: #ddd; font-size: 0.75rem; width: 100%; box-sizing: border-box; }
+    #title-popup label { font-size: 0.65rem; color: #6b7280; }
+    #title-popup-btns { display: flex; gap: 6px; margin-top: 2px; }
+    #title-popup-btns button { flex: 1; padding: 4px; font-size: 0.72rem; border: none; border-radius: 5px; cursor: pointer; }
+    #title-save-btn { background: #7c3aed; color: #fff; }
+    #title-clear-btn { background: #1e1e1e; color: #9ca3af; }
+    .edit-title-btn { background: none; border: none; color: #4b5563; font-size: 0.6rem; cursor: pointer; padding: 1px 4px; border-radius: 3px; }
+    .edit-title-btn:hover { color: #9ca3af; background: #1a1a1a; }
+    .player-class { font-size: 0.68rem; color: #555; margin: 2px 0 5px; }
+    .player-level { font-size: 0.65rem; color: #60a5fa; margin-bottom: 3px; display: flex; align-items: center; gap: 4px; }
+    .hp-bar-wrap { height: 5px; background: #1e1e1e; border-radius: 3px; overflow: hidden; }
+    .hp-bar { height: 100%; border-radius: 3px; transition: width 0.3s; background: #22c55e; }
+    .hp-bar.medium { background: #f59e0b; }
+    .hp-bar.low    { background: #ef4444; }
+    .hp-text { font-size: 0.65rem; color: #555; margin-top: 3px; display: flex; align-items: center; gap: 4px; }
+    .hp-text i.ra { color: #ef4444; font-size: 0.65rem; }
+    .xp-bar-wrap { height: 3px; background: #1e2a2a; border-radius: 3px; overflow: hidden; margin-top: 4px; }
+    .xp-bar { height: 100%; border-radius: 3px; transition: width 0.4s; background: #22d3ee; }
+    .xp-text { font-size: 0.6rem; color: #155e75; margin-top: 2px; }
+    .equip-summary { font-size: 0.6rem; color: #374151; margin-top: 4px; line-height: 1.6; }
+    .equip-summary span { color: #4b5563; }
+    .status-badges { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px; }
+    .badge {
+      font-size: 0.62rem; padding: 2px 6px; border-radius: 4px;
+      background: #1e1e1e; color: #888;
+      display: inline-flex; align-items: center; gap: 3px;
+    }
+    .badge i.ra { font-size: 0.62rem; }
+    .badge.poison        { color: #a3e635; } .badge.poison i.ra        { color: #a3e635; }
+    .badge.bleed         { color: #f87171; } .badge.bleed i.ra         { color: #f87171; }
+    .badge.shield        { color: #67e8f9; } .badge.shield i.ra        { color: #67e8f9; }
+    .badge.blessing      { color: #fbbf24; } .badge.blessing i.ra      { color: #fbbf24; }
+    .badge.dodge         { color: #c4b5fd; } .badge.dodge i.ra         { color: #c4b5fd; }
+    .badge.stun          { color: #fb923c; } .badge.stun i.ra          { color: #fb923c; }
+    .badge.arcane_exhaust{ color: #818cf8; }
+    .badge.battle_cry    { color: #f59e0b; } .badge.battle_cry i.ra    { color: #f59e0b; }
+    .badge.mana_shield   { color: #818cf8; } .badge.mana_shield i.ra   { color: #818cf8; }
+    .badge.divine_shield { color: #fde68a; } .badge.divine_shield i.ra { color: #fde68a; }
+    .badge.defending     { color: #60a5fa; } .badge.defending i.ra     { color: #60a5fa; }
+
+    /* ── CHAT ── */
+    #chat-wrap { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    #mensajes {
+      flex: 1; padding: 16px 20px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 4px;
+      background: #0d0d0d;
+    }
+    #mensajes::-webkit-scrollbar { width: 5px; }
+    #mensajes::-webkit-scrollbar-thumb { background: #1e1e1e; border-radius: 3px; }
+
+    .msg { max-width: 70%; padding: 9px 14px; border-radius: 14px; font-size: 0.88rem; line-height: 1.5; word-wrap: break-word; animation: slideIn 0.15s ease; }
+    .msg.mine  { align-self: flex-end; background: #7c3aed; color: #fff; border-bottom-right-radius: 4px; }
+    .msg.other { align-self: flex-start; background: #1a1a1a; color: #ddd; border-bottom-left-radius: 4px; }
+    .msg .author { font-size: 0.68rem; color: #8b5cf6; margin-bottom: 2px; font-weight: 600; }
+    .msg.mine .author { color: #c4b5fd; }
+    .msg.system { align-self: center; color: #555; font-size: 0.75rem; background: none; padding: 5px 0; display: flex; align-items: center; gap: 5px; }
+    .msg.system i.ra { font-size: 0.8rem; }
+    .msg.gm-scenario { align-self: stretch; background: rgba(124,58,237,0.1); border: 1px solid #7c3aed44; border-radius: 10px; color: #c4b5fd; font-style: italic; font-size: 0.85rem; display: flex; gap: 8px; align-items: flex-start; }
+    .msg.gm-scenario i.ra { color: #7c3aed; flex-shrink: 0; margin-top: 2px; }
+    .msg.gm-event    { align-self: stretch; background: rgba(245,158,11,0.08); border: 1px solid #f59e0b44; border-radius: 10px; color: #fcd34d; font-style: italic; font-size: 0.85rem; display: flex; gap: 8px; align-items: flex-start; }
+    .msg.gm-event i.ra { color: #f59e0b; flex-shrink: 0; margin-top: 2px; }
+
+    /* ── SIDEBAR ENEMIGOS ── */
+    #sidebar-right {
+      width: 175px; flex-shrink: 0; padding: 14px 12px;
+      border-left: 1px solid #1a1a1a; overflow-y: auto; background: #0f0f0f;
+    }
+    .enemy-card {
+      background: #141414; border-radius: 10px; padding: 10px;
+      margin-bottom: 8px; border: 1px solid #1e1e1e;
+    }
+    .enemy-card.elite {
+      border-color: #d97706;
+      background: #1a1407;
+      box-shadow: 0 0 8px 1px #d9770622;
+    }
+    .enemy-card.boss {
+      border-color: #7c3aed;
+      background: #110d1a;
+      box-shadow: 0 0 14px 2px #7c3aed44;
+    }
+    .enemy-card.current-turn { border-color: #ef4444; }
+    .enemy-card.elite.current-turn { border-color: #f59e0b; }
+    .enemy-card.boss.current-turn  { border-color: #a855f7; }
+    .tier-badge {
+      font-size: 0.6rem; font-weight: 700; letter-spacing: 0.05em;
+      padding: 1px 5px; border-radius: 3px; margin-left: 4px;
+      text-transform: uppercase; vertical-align: middle;
+    }
+    .tier-badge.elite { background: #78350f; color: #fbbf24; }
+    .tier-badge.boss  { background: #3b0764; color: #c084fc; }
+    .enemy-name {
+      font-size: 0.82rem; font-weight: 600; color: #fca5a5;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .enemy-name i.ra { color: #ef4444; }
+    .enemy-name .turn-ico { color: #f59e0b; font-size: 0.7rem; margin-left: auto; }
+    .enemy-stats { font-size: 0.65rem; color: #555; margin: 3px 0 5px; display: flex; gap: 8px; }
+    .enemy-stats span { display: flex; align-items: center; gap: 3px; }
+    .enemy-stats i.ra { font-size: 0.65rem; }
+
+    /* ── PANEL DE ACCIÓN ── */
+    #action-panel { padding: 10px 16px; border-top: 1px solid #1a1a1a; background: #0f0f0f; flex-shrink: 0; }
+    #turn-banner {
+      font-size: 0.75rem; font-weight: 600; color: #f59e0b;
+      margin-bottom: 8px; display: none; align-items: center; gap: 6px;
+    }
+    #turn-banner i.ra { font-size: 0.9rem; }
+    #skills-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+    #skills-row[hidden] { display: none; }
+    .skill-btn {
+      padding: 6px 13px; border: 1px solid #7c3aed55; border-radius: 8px;
+      background: #1a1a1a; color: #c4b5fd; font-size: 0.78rem;
+      cursor: pointer; transition: background 0.15s, border-color 0.15s;
+      display: inline-flex; align-items: center; gap: 5px;
+    }
+    .skill-btn i.ra { font-size: 0.82rem; }
+    .skill-btn:hover:not(:disabled) { background: #7c3aed22; border-color: #7c3aed; }
+    .skill-btn:disabled { opacity: 0.3; cursor: default; }
+    #target-row { display: flex; gap: 6px; margin-bottom: 8px; }
+    #target-row[hidden] { display: none; }
+    #target-row input {
+      flex: 1; padding: 8px 12px; background: #141414; border: 1px solid #2a2a2a;
+      border-radius: 8px; color: #eee; font-size: 0.85rem; outline: none;
+    }
+    #target-row input:focus { border-color: #7c3aed; }
+
+    #form { display: flex; gap: 8px; }
+    #form input {
+      flex: 1; padding: 10px 14px; background: #141414; border: 1px solid #2a2a2a;
+      border-radius: 10px; color: #eee; font-size: 0.88rem; outline: none;
+      font-family: 'Inter', sans-serif; transition: border-color 0.2s;
+    }
+    #form input:focus { border-color: #7c3aed; }
+
+    /* ── INVENTARIO ── */
+    #inventory-btn {
+      padding: 6px 14px; border: 1px solid #2a2a2a; border-radius: 8px;
+      background: #1a1a1a; color: #9ca3af; font-size: 0.8rem;
+      cursor: pointer; transition: background 0.15s, border-color 0.15s;
+      display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+    }
+    #inventory-btn:hover { background: #252525; border-color: #7c3aed55; color: #c4b5fd; }
+    #inventory-btn i.ra { font-size: 0.85rem; }
+
+    #inventory-panel {
+      position: fixed; bottom: 0; left: 0; right: 0; height: 50vh;
+      background: #111; border-top: 1px solid #2a2a2a;
+      display: flex; flex-direction: column; z-index: 100;
+      transform: translateY(100%); transition: transform 0.25s ease;
+    }
+    #inventory-panel.open { transform: translateY(0); }
+
+    #inventory-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-bottom: 1px solid #1e1e1e; flex-shrink: 0;
+    }
+    #inventory-header span { font-size: 0.85rem; font-weight: 600; color: #ccc; display: flex; align-items: center; gap: 8px; }
+    #inventory-header span i.ra { color: #7c3aed; }
+    #inventory-close {
+      background: none; border: none; color: #555; font-size: 1rem;
+      cursor: pointer; padding: 2px 8px; border-radius: 6px;
+    }
+    #inventory-close:hover { background: #1e1e1e; color: #ccc; }
+
+    #inventory-body { display: flex; flex: 1; min-height: 0; gap: 0; }
+
+    #equipment-slots {
+      width: 200px; flex-shrink: 0; padding: 12px;
+      border-right: 1px solid #1e1e1e; overflow-y: auto;
+    }
+    .equip-slot-title { font-size: 0.65rem; color: #444; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    .equip-slot {
+      background: #141414; border: 1px solid #222; border-radius: 8px;
+      padding: 8px 10px; margin-bottom: 6px;
+      display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    }
+    .equip-slot-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .equip-slot-label { font-size: 0.62rem; color: #444; text-transform: uppercase; letter-spacing: 0.8px; }
+    .equip-slot-item { font-size: 0.75rem; color: #9ca3af; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .equip-slot-item.equipped { color: #e5e7eb; }
+    .equip-unequip-btn {
+      padding: 3px 8px; border: 1px solid #333; border-radius: 5px;
+      background: #1a1a1a; color: #6b7280; font-size: 0.7rem;
+      cursor: pointer; flex-shrink: 0; transition: background 0.15s;
+    }
+    .equip-unequip-btn:hover { background: #2a1a1a; color: #f87171; border-color: #f8717155; }
+
+    #inventory-grid {
+      flex: 1; padding: 12px; overflow-y: auto;
+      display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start;
+    }
+    .item-card {
+      background: #141414; border-radius: 10px; padding: 10px 12px;
+      border: 1px solid #222; width: 170px; flex-shrink: 0;
+      display: flex; flex-direction: column; gap: 4px;
+      transition: border-color 0.15s;
+    }
+    .item-card:hover { border-color: #374151; }
+    .item-card-top { display: flex; align-items: center; gap: 7px; }
+    .item-type-icon { font-size: 1rem; }
+    .item-name { font-size: 0.78rem; font-weight: 600; color: #ddd; line-height: 1.3; }
+    .item-level { font-size: 0.62rem; color: #4b5563; }
+    .item-stats { font-size: 0.65rem; color: #6b7280; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+    .item-stat { display: flex; align-items: center; gap: 2px; }
+    .item-stat i.ra { font-size: 0.65rem; }
+    .item-buttons { display: flex; gap: 5px; margin-top: 4px; }
+    .item-equip-btn {
+      flex: 1; padding: 4px 0; border: 1px solid #7c3aed55; border-radius: 5px;
+      background: #1a1a1a; color: #c4b5fd; font-size: 0.7rem;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .item-equip-btn:hover { background: #7c3aed22; }
+    .item-drop-btn {
+      padding: 4px 8px; border: 1px solid #2a2a2a; border-radius: 5px;
+      background: #1a1a1a; color: #6b7280; font-size: 0.7rem;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .item-drop-btn:hover { background: #2a1a1a; color: #f87171; }
+
+    /* Rarity colors */
+    .rarity-common    { color: #9ca3af; }
+    .rarity-uncommon  { color: #4ade80; }
+    .rarity-rare      { color: #60a5fa; }
+    .rarity-legendary { color: #fbbf24; }
+
+    /* ── DUELO ── */
+    #duel-challenge-banner {
+      position: fixed; top: 54px; left: 50%; transform: translateX(-50%);
+      background: #1a1000; border: 1px solid #f59e0b88; border-radius: 12px;
+      padding: 12px 18px; z-index: 200; display: flex; align-items: center; gap: 12px;
+      box-shadow: 0 4px 24px #0008; min-width: 320px;
+    }
+    #duel-challenge-banner[hidden] { display: none !important; }
+    #duel-challenge-banner .duel-msg { font-size: 0.85rem; color: #fcd34d; flex: 1; }
+    #duel-challenge-banner .duel-msg i.ra { color: #f59e0b; margin-right: 4px; }
+    .duel-accept-btn { padding: 6px 14px; border: none; border-radius: 7px; background: #166534; color: #4ade80; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+    .duel-reject-btn { padding: 6px 14px; border: none; border-radius: 7px; background: #2a1010; color: #f87171; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+
+    #duel-hud {
+      position: fixed; top: 54px; right: 12px; width: 220px;
+      background: #110d1a; border: 1px solid #7c3aed55; border-radius: 12px;
+      padding: 12px; z-index: 150; display: flex; flex-direction: column; gap: 8px;
+    }
+    #duel-hud[hidden] { display: none !important; }
+    .duel-hud-title { font-size: 0.68rem; color: #7c3aed; text-transform: uppercase; letter-spacing: 1.2px; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+    .duel-fighter { display: flex; flex-direction: column; gap: 3px; }
+    .duel-fighter-name { font-size: 0.78rem; font-weight: 600; color: #ddd; display: flex; align-items: center; gap: 5px; }
+    .duel-fighter-name.active-turn { color: #f59e0b; }
+    .duel-fighter-name i.ra { font-size: 0.8rem; }
+    .duel-vs { text-align: center; font-size: 0.7rem; color: #333; font-weight: 700; letter-spacing: 2px; }
+    #duel-forfeit-btn { padding: 5px; border: 1px solid #2a1a1a; border-radius: 6px; background: none; color: #555; font-size: 0.7rem; cursor: pointer; transition: color 0.15s; }
+    #duel-forfeit-btn:hover { color: #f87171; border-color: #f8717155; }
+
+    /* ── GOLD ── */
+    .gold-text { font-size: 0.62rem; color: #ca8a04; margin-top: 2px; display: flex; align-items: center; gap: 4px; }
+    .gold-text i.ra { color: #fbbf24; font-size: 0.65rem; }
+
+    /* ── DIALOG OVERLAY ── */
+    #dialog-overlay {
+      position: fixed; inset: 0; z-index: 300;
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(2px);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #dialog-overlay[hidden] { display: none !important; }
+    #dialog-box {
+      background: #0f0a1a; border: 1px solid #7c3aed88;
+      border-radius: 18px; padding: 28px 32px; max-width: 480px; width: 90%;
+      box-shadow: 0 8px 48px #0008;
+      display: flex; flex-direction: column; gap: 16px;
+      animation: slideIn 0.2s ease;
+    }
+    #dialog-npc {
+      font-size: 0.72rem; font-weight: 700; color: #7c3aed;
+      text-transform: uppercase; letter-spacing: 1.5px;
+      display: flex; align-items: center; gap: 7px;
+    }
+    #dialog-npc i.ra { font-size: 0.9rem; }
+    #dialog-text {
+      font-size: 0.95rem; color: #e5e7eb; line-height: 1.6;
+      font-style: italic;
+    }
+    #dialog-options { display: flex; flex-direction: column; gap: 7px; }
+    .dialog-option-btn {
+      padding: 10px 16px; border: 1px solid #2a2a3a; border-radius: 10px;
+      background: #1a1a2a; color: #c4b5fd; font-size: 0.85rem;
+      cursor: pointer; text-align: left; transition: background 0.15s, border-color 0.15s;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .dialog-option-btn:hover { background: #7c3aed22; border-color: #7c3aed; }
+    .dialog-option-btn i.ra { color: #7c3aed; flex-shrink: 0; }
+    #dialog-close-btn {
+      align-self: flex-end; padding: 6px 14px; border: 1px solid #2a2a2a;
+      border-radius: 8px; background: none; color: #555; font-size: 0.78rem;
+      cursor: pointer; transition: color 0.15s;
+    }
+    #dialog-close-btn:hover { color: #aaa; }
+
+    /* ── SHOP PANEL ── */
+    #shop-panel {
+      position: fixed; bottom: 0; left: 0; right: 0; height: 55vh;
+      background: #0a0a14; border-top: 1px solid #2a2a2a;
+      display: flex; flex-direction: column; z-index: 100;
+      transform: translateY(100%); transition: transform 0.25s ease;
+    }
+    #shop-panel.open { transform: translateY(0); }
+    #shop-panel.minimized { height: auto !important; }
+    #shop-panel.minimized #shop-body,
+    #shop-panel.minimized #shop-sell-section { display: none !important; }
+    #shop-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-bottom: 1px solid #1e1e1e; flex-shrink: 0;
+    }
+    #shop-header-left { display: flex; align-items: center; gap: 10px; }
+    #shop-title { font-size: 0.9rem; font-weight: 700; color: #fbbf24; display: flex; align-items: center; gap: 7px; }
+    #shop-title i.ra { color: #f59e0b; }
+    #shop-my-gold { font-size: 0.78rem; color: #ca8a04; display: flex; align-items: center; gap: 5px; }
+    #shop-my-gold i.ra { color: #fbbf24; }
+    #shop-close-btn, #shop-min-btn {
+      background: none; border: none; color: #555; font-size: 1rem;
+      cursor: pointer; padding: 2px 8px; border-radius: 6px;
+    }
+    #shop-close-btn:hover, #shop-min-btn:hover { background: #1e1e1e; color: #ccc; }
+    .shop-header-btns { display: flex; gap: 2px; align-items: center; }
+    #shop-body {
+      flex: 1; overflow-y: auto; padding: 12px 16px;
+      display: flex; flex-wrap: wrap; gap: 10px; align-content: flex-start;
+    }
+    .shop-item-card {
+      background: #111; border: 1px solid #222; border-radius: 12px;
+      padding: 12px 14px; width: 185px; display: flex; flex-direction: column; gap: 5px;
+      transition: border-color 0.15s;
+    }
+    .shop-item-card:hover { border-color: #374151; }
+    .shop-item-top { display: flex; align-items: center; gap: 8px; }
+    .shop-item-name { font-size: 0.8rem; font-weight: 600; color: #ddd; line-height: 1.3; }
+    .shop-item-meta { font-size: 0.62rem; color: #4b5563; }
+    .shop-item-stats { font-size: 0.65rem; color: #6b7280; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+    .shop-item-stat { display: flex; align-items: center; gap: 2px; }
+    .shop-item-stat i.ra { font-size: 0.65rem; }
+    .shop-item-fits { font-size: 0.6rem; color: #374151; margin-top: 1px; }
+    .shop-item-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+    .shop-item-price { font-size: 0.78rem; font-weight: 700; color: #fbbf24; display: flex; align-items: center; gap: 4px; }
+    .shop-item-price i.ra { font-size: 0.75rem; }
+    .shop-buy-btn {
+      padding: 5px 12px; border: 1px solid #92400e55; border-radius: 6px;
+      background: #1c1000; color: #fbbf24; font-size: 0.75rem; font-weight: 600;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .shop-buy-btn:hover:not(:disabled) { background: #78350f44; }
+    .shop-buy-btn:disabled { opacity: 0.35; cursor: default; }
+    #shop-sell-section {
+      border-top: 1px solid #1e1e1e; padding: 10px 16px; flex-shrink: 0;
+      display: none;
+    }
+    #shop-sell-section.visible { display: block; }
+    #shop-sell-title { font-size: 0.68rem; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    #shop-sell-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sell-item-btn {
+      padding: 5px 10px; border: 1px solid #2a2a2a; border-radius: 7px;
+      background: #141414; color: #9ca3af; font-size: 0.72rem;
+      cursor: pointer; transition: background 0.15s, color 0.15s;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .sell-item-btn:hover { background: #2a1000; color: #fbbf24; border-color: #92400e55; }
+    .sell-price { color: #ca8a04; font-size: 0.65rem; margin-left: 2px; }
+    #shop-btn {
+      padding: 6px 14px; border: 1px solid #92400e55; border-radius: 8px;
+      background: #1c1000; color: #fbbf24; font-size: 0.8rem;
+      cursor: pointer; transition: background 0.15s, border-color 0.15s;
+      display: none; align-items: center; gap: 6px; flex-shrink: 0;
+    }
+    #shop-btn.visible { display: inline-flex; }
+    #shop-btn:hover { background: #78350f44; border-color: #f59e0b88; }
+    #shop-btn i.ra { font-size: 0.85rem; }
+
+    /* ── TURN TIMER ── */
+    #turn-timer-bar {
+      height: 4px; width: 100%; background: #1a1a1a;
+      position: relative; overflow: hidden; flex-shrink: 0;
+    }
+    #turn-timer-bar[hidden] { display: none !important; }
+    #turn-timer-fill {
+      height: 100%; width: 100%;
+      background: linear-gradient(90deg, #22c55e, #f59e0b);
+      transform-origin: left;
+      transition: none;
+    }
+    #turn-timer-fill.urgent { background: linear-gradient(90deg, #ef4444, #f87171); }
+    #turn-timer-label {
+      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+      font-size: 0.6rem; color: #555; font-weight: 600; pointer-events: none;
+      line-height: 1;
+    }
+    #turn-timer-label.urgent { color: #ef4444; }
+
+    /* ── VOTE PANEL ── */
+    #vote-panel {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #0d0d14; border-top: 2px solid #fbbf2455;
+      padding: 12px 18px; z-index: 90;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    #vote-panel[hidden] { display: none !important; }
+    #vote-panel-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    #vote-item-info { display: flex; align-items: center; gap: 8px; flex: 1; }
+    #vote-item-icon { font-size: 1.3rem; }
+    #vote-item-name { font-size: 0.88rem; font-weight: 700; }
+    #vote-item-meta { font-size: 0.7rem; color: #666; }
+    #vote-item-stats { font-size: 0.7rem; color: #4b5563; display: flex; gap: 8px; }
+    #vote-progress { font-size: 0.72rem; color: #555; }
+    #vote-progress b { color: #fbbf24; }
+    #vote-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .vote-mode-label { font-size: 0.72rem; color: #555; }
+    .vote-btn {
+      padding: 6px 16px; border: none; border-radius: 7px;
+      font-size: 0.8rem; font-weight: 600; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 5px; transition: opacity 0.15s;
+    }
+    .vote-btn:disabled { opacity: 0.3; cursor: default; }
+    .vote-btn.need    { background: #7c3aed; color: #fff; }
+    .vote-btn.greed   { background: #b45309; color: #fff; }
+    .vote-btn.pass    { background: #1e1e1e; color: #9ca3af; border: 1px solid #333; }
+    .vote-btn.council { background: #1e3a5f; color: #93c5fd; border: 1px solid #1e40af55; }
+    #vote-voted-label { font-size: 0.72rem; color: #4ade80; display: none; align-items: center; gap: 4px; }
+    #vote-panel.minimized #vote-panel-header,
+    #vote-panel.minimized #vote-actions { display: none !important; }
+    #vote-min-btn { background: none; border: none; color: #555; font-size: 0.85rem; cursor: pointer; padding: 2px 6px; border-radius: 4px; position: absolute; right: 8px; top: 8px; }
+    #vote-min-btn:hover { background: #1a1a1a; color: #ccc; }
+    #vote-panel { position: relative; }
+    #loot-timer-bar { height: 3px; width: 100%; background: #1a1a1a; position: relative; overflow: hidden; }
+    #loot-timer-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #fbbf24, #f59e0b); transform-origin: left; transition: none; }
+    #loot-timer-fill.urgent { background: linear-gradient(90deg, #ef4444, #f87171); }
+
+    @keyframes slideIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    #peek-modal-overlay { position: fixed; inset: 0; background: #000c; z-index: 200; display: flex; align-items: center; justify-content: center; }
+    #peek-modal-overlay[hidden] { display: none !important; }
+    #peek-modal { background: #0d0d14; border: 1px solid #2a2a3a; border-radius: 12px; padding: 18px; max-width: 380px; width: 94%; max-height: 85vh; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+    #peek-modal-close { float: right; background: none; border: none; color: #6b7280; cursor: pointer; font-size: 1rem; }
+    #peek-header { display: flex; align-items: center; gap: 10px; }
+    .peek-avatar { font-size: 2rem; line-height: 1; }
+    .peek-name-block { flex: 1; }
+    .peek-name-block .peek-uname { font-size: 1rem; font-weight: 700; color: #f3f4f6; }
+    .peek-name-block .peek-class { font-size: 0.75rem; color: #9ca3af; }
+    .peek-level-badge { background: #1e1b4b; color: #a5b4fc; font-size: 0.7rem; font-weight: 700; padding: 3px 8px; border-radius: 99px; }
+    .peek-offline-tag { background: #1f2937; color: #6b7280; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; margin-left: 4px; }
+    .peek-section-title { font-size: 0.65rem; font-weight: 700; color: #4b5563; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+    #peek-vitals { display: flex; flex-direction: column; gap: 5px; }
+    .peek-bar-row { display: flex; align-items: center; gap: 7px; font-size: 0.72rem; }
+    .peek-bar-track { flex: 1; height: 5px; background: #1a1a1a; border-radius: 3px; overflow: hidden; }
+    .peek-bar-fill { height: 100%; border-radius: 3px; }
+    .peek-bar-fill.hp  { background: linear-gradient(90deg,#22c55e,#16a34a); }
+    .peek-bar-fill.xp  { background: linear-gradient(90deg,#818cf8,#6366f1); }
+    .peek-bar-label { font-size: 0.68rem; color: #6b7280; min-width: 70px; text-align: right; }
+    #peek-stats-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; }
+    .peek-stat-box { background: #111; border-radius: 7px; padding: 6px 8px; text-align: center; }
+    .peek-stat-box .sv { font-size: 0.9rem; font-weight: 700; color: #e5e7eb; }
+    .peek-stat-box .sk { font-size: 0.58rem; color: #6b7280; text-transform: uppercase; }
+    .peek-eq-row { font-size: 0.75rem; color: #d1d5db; padding: 3px 0; display: flex; gap: 6px; align-items: center; }
+    .peek-eq-stats { font-size: 0.63rem; color: #4b5563; margin-left: auto; }
+    .peek-inv-list { display: flex; flex-direction: column; gap: 4px; }
+    .peek-inv-item { font-size: 0.74rem; background: #111; border-radius: 5px; padding: 5px 8px; display: flex; justify-content: space-between; align-items: center; }
+    .peek-inv-item .item-meta { font-size: 0.63rem; color: #6b7280; }
+    .peek-empty { font-size: 0.74rem; color: #374151; font-style: italic; }
+    .peek-rel-list { display: flex; flex-direction: column; gap: 5px; }
+    .peek-rel-item { display: flex; align-items: center; gap: 8px; font-size: 0.74rem; background: #0f0f17; border-radius: 6px; padding: 6px 8px; }
+    .peek-rel-affinity { font-size: 0.85rem; min-width: 22px; text-align: center; }
+    .peek-rel-info { flex: 1; }
+    .peek-rel-name { font-weight: 600; color: #d1d5db; }
+    .peek-rel-history { font-size: 0.63rem; color: #4b5563; }
+
+    /* ── COMBAT ANIMATIONS ── */
+    @keyframes lunge {
+      0%   { transform: translate(0,0) scale(1); z-index: 20; }
+      35%  { transform: translate(var(--lx), var(--ly)) scale(1.06); z-index: 20; }
+      65%  { transform: translate(var(--lx), var(--ly)) scale(1.06); z-index: 20; }
+      100% { transform: translate(0,0) scale(1); }
+    }
+    @keyframes hit-flash {
+      0%   { background: inherit; }
+      20%  { background: rgba(239,68,68,0.45); box-shadow: 0 0 12px 2px #ef444466; }
+      100% { background: inherit; }
+    }
+    @keyframes shake-die {
+      0%   { transform: translate(0,0)   rotate(0deg);   opacity: 1; }
+      15%  { transform: translate(-7px,2px)  rotate(-3deg); }
+      30%  { transform: translate(7px,-2px)  rotate(3deg); }
+      45%  { transform: translate(-5px,1px)  rotate(-2deg); opacity: 0.8; }
+      60%  { transform: translate(5px,-1px)  rotate(2deg);  opacity: 0.5; }
+      80%  { transform: translate(-3px,0px)  rotate(-1deg); opacity: 0.2; }
+      100% { transform: translate(0,0)   rotate(0deg);   opacity: 0; }
+    }
+    .lunging {
+      animation: lunge 0.38s cubic-bezier(0.25,0.46,0.45,0.94) both;
+      position: relative;
+    }
+    .hit-flash { animation: hit-flash 0.38s ease both; }
+    .dying     { animation: shake-die 0.65s ease-out both; pointer-events: none; }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="screen-login" class="screen active">
+  <h1><i class="ra ra-sword"></i> WebSocket RPG</h1>
+  <p>Aventura multijugador en tiempo real</p>
+  <form id="login-form">
+    <input id="username-input" placeholder="Tu nombre..." maxlength="20" autocomplete="off" autofocus />
+    <button class="btn" type="submit"><i class="ra ra-plain-arrow"></i> Entrar</button>
+  </form>
+  <label class="gm-toggle">
+    <input type="checkbox" id="gm-check">
+    <i class="ra ra-crown"></i> Soy el Game Master
+  </label>
+</div>
+
+<!-- SELECCIÓN DE CLASE -->
+<div id="screen-class" class="screen">
+  <h2>Elige tu clase</h2>
+  <p>Habilidades escalan con tus estadísticas base</p>
+  <div class="class-grid" id="class-grid"></div>
+  <button class="btn secondary" id="skip-class"><i class="ra ra-eye"></i> Espectador / GM</button>
+</div>
+
+<!-- PANTALLA PRINCIPAL -->
+<div id="screen-chat" class="screen">
+  <div id="header">
+    <span id="header-phase"><i class="ra ra-castle-emblem"></i> Lobby</span>
+    <span id="header-scenario"><i class="ra ra-scroll-unfurled"></i> Sin escenario activo</span>
+    <span id="header-users"><i class="ra ra-player"></i> 0 online</span>
+  </div>
+
+  <div id="body">
+    <div id="sidebar-left">
+      <div class="sidebar-title"><i class="ra ra-player"></i> Jugadores</div>
+      <div id="player-list"></div>
+    </div>
+
+    <div id="chat-wrap">
+      <div id="mensajes"></div>
+      <div id="action-panel">
+        <div id="turn-banner"><i class="ra ra-dice-six"></i> ¡Es tu turno!</div>
+        <div id="turn-timer-bar" hidden>
+          <div id="turn-timer-fill"></div>
+          <span id="turn-timer-label">2:00</span>
+        </div>
+        <div id="skills-row" hidden></div>
+        <div id="target-row" hidden>
+          <input id="target-input" placeholder="Objetivo (nombre del enemigo o aliado)..." />
+        </div>
+        <form id="form">
+          <input id="input" placeholder="Escribe un mensaje o comando /gm ..." autocomplete="off" />
+          <button class="btn secondary" type="button" id="inventory-btn"><i class="ra ra-backpack"></i> Inventario</button>
+          <button type="button" id="shop-btn"><i class="ra ra-coins"></i> Tienda</button>
+          <button class="btn" type="submit"><i class="ra ra-plain-arrow"></i> Enviar</button>
+        </form>
+      </div>
+    </div>
+
+    <div id="sidebar-right">
+      <div class="sidebar-title"><i class="ra ra-dragon"></i> Enemigos</div>
+      <div id="enemy-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- INVENTORY PANEL -->
+<div id="inventory-panel">
+  <div id="inventory-header">
+    <span><i class="ra ra-backpack"></i> Equipo e Inventario</span>
+    <button id="inventory-close">✕</button>
+  </div>
+  <div id="inventory-body">
+    <div id="equipment-slots">
+      <div class="equip-slot-title">Equipo</div>
+      <div class="equip-slot" id="slot-weapon">
+        <div class="equip-slot-info">
+          <div class="equip-slot-label"><i class="ra ra-sword"></i> Arma</div>
+          <div class="equip-slot-item" id="slot-weapon-name">— vacío —</div>
+        </div>
+        <button class="equip-unequip-btn" data-slot="weapon" style="display:none">Quitar</button>
+      </div>
+      <div class="equip-slot" id="slot-armor">
+        <div class="equip-slot-info">
+          <div class="equip-slot-label"><i class="ra ra-shield"></i> Armadura</div>
+          <div class="equip-slot-item" id="slot-armor-name">— vacío —</div>
+        </div>
+        <button class="equip-unequip-btn" data-slot="armor" style="display:none">Quitar</button>
+      </div>
+      <div class="equip-slot" id="slot-accessory">
+        <div class="equip-slot-info">
+          <div class="equip-slot-label"><i class="ra ra-ring"></i> Accesorio</div>
+          <div class="equip-slot-item" id="slot-accessory-name">— vacío —</div>
+        </div>
+        <button class="equip-unequip-btn" data-slot="accessory" style="display:none">Quitar</button>
+      </div>
+    </div>
+    <div id="inventory-grid">
+      <div style="color:#444;font-size:0.8rem;padding:8px;">Inventario vacío</div>
+    </div>
+  </div>
+</div>
+
+<!-- DUEL CHALLENGE BANNER -->
+<div id="duel-challenge-banner" hidden>
+  <div class="duel-msg"><i class="ra ra-sword"></i> <span id="duel-challenger-name">?</span> te desafía a un duelo</div>
+  <button class="duel-accept-btn" id="duel-accept-btn">Aceptar</button>
+  <button class="duel-reject-btn" id="duel-reject-btn">Rechazar</button>
+</div>
+
+<!-- DUEL HUD -->
+<div id="duel-hud" hidden>
+  <div class="duel-hud-title"><i class="ra ra-crossed-swords"></i> Duelo en curso</div>
+  <div class="duel-fighter" id="duel-fighter-1"></div>
+  <div class="duel-vs">VS</div>
+  <div class="duel-fighter" id="duel-fighter-2"></div>
+  <button id="duel-forfeit-btn"><i class="ra ra-flag"></i> Rendirse</button>
+</div>
+
+<!-- DIALOG OVERLAY -->
+<div id="dialog-overlay" hidden>
+  <div id="dialog-box">
+    <div id="dialog-npc"><i class="ra ra-player-dodge"></i> <span id="dialog-npc-name">NPC</span></div>
+    <div id="dialog-text">…</div>
+    <div id="dialog-options"></div>
+    <button id="dialog-close-btn">Cerrar</button>
+  </div>
+</div>
+
+<!-- SHOP PANEL -->
+<div id="shop-panel">
+  <div id="shop-header">
+    <div id="shop-header-left">
+      <div id="shop-title"><i class="ra ra-coins"></i> <span id="shop-name-label">Tienda</span></div>
+      <div id="shop-my-gold"><i class="ra ra-gold-bar"></i> <span id="shop-gold-amount">0</span></div>
+    </div>
+    <div class="shop-header-btns">
+      <button id="shop-min-btn" title="Minimizar">—</button>
+      <button id="shop-close-btn">✕</button>
+    </div>
+  </div>
+  <div id="shop-body"></div>
+  <div id="shop-sell-section">
+    <div id="shop-sell-title"><i class="ra ra-gold-bar"></i> Vender del inventario</div>
+    <div id="shop-sell-grid"></div>
+  </div>
+</div>
+
+<!-- VOTE PANEL -->
+<div id="peek-modal-overlay" hidden>
+  <div id="peek-modal">
+    <button id="peek-modal-close" onclick="document.getElementById('peek-modal-overlay').hidden=true">✕</button>
+    <div id="peek-header"></div>
+    <div id="peek-vitals"></div>
+    <div id="peek-stats-grid"></div>
+    <div id="peek-equip-section"></div>
+    <div id="peek-inv-section"></div>
+    <div id="peek-relations-section"></div>
+  </div>
+</div>
+
+<div id="vote-panel" hidden>
+  <button id="vote-min-btn" title="Minimizar">—</button>
+  <div id="loot-timer-bar"><div id="loot-timer-fill"></div></div>
+  <div id="vote-panel-header">
+    <div id="vote-item-info">
+      <span id="vote-item-icon"><i class="ra ra-gem"></i></span>
+      <div>
+        <div id="vote-item-name">—</div>
+        <div id="vote-item-meta">—</div>
+      </div>
+    </div>
+    <div id="vote-item-stats"></div>
+    <span id="vote-progress"><b id="vote-count">0</b>/<b id="vote-total">0</b> votos</span>
+    <span id="vote-breakdown" style="font-size:0.68rem;color:#555;margin-left:6px"></span>
+  </div>
+  <div id="vote-actions">
+    <span class="vote-mode-label" id="vote-mode-label"></span>
+    <span id="vote-voted-label"><i class="ra ra-check"></i> Votaste</span>
+    <!-- buttons rendered dynamically -->
+  </div>
+</div>
+
+<div id="title-popup" hidden>
+  <label>Prefijo</label>
+  <input id="title-prefix-input" placeholder="Sir, Lady, El…" maxlength="30">
+  <label>Sufijo</label>
+  <input id="title-suffix-input" placeholder="el Valiente, la Sabia…" maxlength="30">
+  <div id="title-popup-btns">
+    <button id="title-save-btn">Guardar</button>
+    <button id="title-clear-btn">Limpiar</button>
+  </div>
+</div>
+
+<script>
+let ws, myUsername, isGM = false, myClass = null;
+let isMyTurn = false, mySkills = [];
+let classesData = [];
+let gameState = { phase: "lobby", players: [], enemies: [], currentTurn: null };
+
+// Local inventory/equipment state
+let myInventory = [];
+let myEquipment = { weapon: null, armor: null, accessory: null };
+let prevLevels  = {};  // username → last known level
+let hasVoted    = false; // voted in current vote session
+
+// Combat animations
+const dyingEnemies = new Set();
+
+function getCardEl(name, isEnemy) {
+  return isEnemy
+    ? document.querySelector(`[data-enemy="${CSS.escape(name)}"]`)
+    : document.querySelector(`[data-username="${CSS.escape(name)}"]`);
+}
+
+function animateLunge(attackerName, atkIsEnemy, targetName, tgtIsEnemy) {
+  const atkEl = getCardEl(attackerName, atkIsEnemy);
+  const tgtEl = getCardEl(targetName,  tgtIsEnemy);
+  if (!atkEl || !tgtEl) return;
+
+  const aRect = atkEl.getBoundingClientRect();
+  const tRect = tgtEl.getBoundingClientRect();
+  const dx = ((tRect.left + tRect.width  / 2) - (aRect.left + aRect.width  / 2)) * 0.38;
+  const dy = ((tRect.top  + tRect.height / 2) - (aRect.top  + aRect.height / 2)) * 0.38;
+
+  atkEl.style.setProperty("--lx", `${dx}px`);
+  atkEl.style.setProperty("--ly", `${dy}px`);
+  atkEl.classList.remove("lunging");
+  void atkEl.offsetWidth; // force reflow
+  atkEl.classList.add("lunging");
+  atkEl.addEventListener("animationend", () => atkEl.classList.remove("lunging"), { once: true });
+
+  // hit flash on target after 35% of 380ms ≈ 130ms
+  setTimeout(() => {
+    tgtEl.classList.remove("hit-flash");
+    void tgtEl.offsetWidth;
+    tgtEl.classList.add("hit-flash");
+    tgtEl.addEventListener("animationend", () => tgtEl.classList.remove("hit-flash"), { once: true });
+  }, 133);
+}
+
+function animateLungeAoe(attackerName, atkIsEnemy, targetNames) {
+  const atkEl = getCardEl(attackerName, atkIsEnemy);
+  if (!atkEl) return;
+  // Lunge toward the center-most target
+  const targets = targetNames.map(n => getCardEl(n, true)).filter(Boolean);
+  if (!targets.length) return;
+  const aRect = atkEl.getBoundingClientRect();
+  let cx = 0, cy = 0;
+  for (const el of targets) {
+    const r = el.getBoundingClientRect();
+    cx += r.left + r.width / 2;
+    cy += r.top  + r.height / 2;
+  }
+  cx /= targets.length; cy /= targets.length;
+  const dx = (cx - (aRect.left + aRect.width / 2)) * 0.38;
+  const dy = (cy - (aRect.top  + aRect.height / 2)) * 0.38;
+  atkEl.style.setProperty("--lx", `${dx}px`);
+  atkEl.style.setProperty("--ly", `${dy}px`);
+  atkEl.classList.remove("lunging");
+  void atkEl.offsetWidth;
+  atkEl.classList.add("lunging");
+  atkEl.addEventListener("animationend", () => atkEl.classList.remove("lunging"), { once: true });
+  setTimeout(() => {
+    for (const el of targets) {
+      el.classList.remove("hit-flash");
+      void el.offsetWidth;
+      el.classList.add("hit-flash");
+      el.addEventListener("animationend", () => el.classList.remove("hit-flash"), { once: true });
+    }
+  }, 133);
+}
+
+function animateEnemyDeath(name) {
+  dyingEnemies.add(name);
+  const card = getCardEl(name, true);
+  if (!card) { dyingEnemies.delete(name); return; }
+  card.classList.add("dying");
+  card.addEventListener("animationend", () => {
+    dyingEnemies.delete(name);
+    card.remove();
+  }, { once: true });
+}
+
+// Shop + Dialog state
+let myGold = 0;
+let shopOpen = false;
+
+function shopPrice(item) {
+  const base = { common: 40, uncommon: 90, rare: 200, legendary: 450 };
+  const perLevel = { common: 15, uncommon: 30, rare: 60, legendary: 120 };
+  return (base[item.rarity] || 40) + (item.level || 1) * (perLevel[item.rarity] || 15);
+}
+
+// ── DIALOG ──────────────────────────────────────────────────────────────────
+
+let _dialogOptions = [];
+
+function showDialog(npc, text, options) {
+  _dialogOptions = options || [];
+  document.getElementById("dialog-npc-name").textContent = npc;
+  document.getElementById("dialog-text").textContent = text;
+  const optsEl = document.getElementById("dialog-options");
+  optsEl.innerHTML = "";
+  const canChoose = !isGM && !!myClass;
+  _dialogOptions.forEach((opt, i) => {
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex;align-items:center;gap:6px;margin-bottom:4px";
+    if (canChoose) {
+      const btn = document.createElement("button");
+      btn.className = "dialog-option-btn";
+      btn.dataset.dialogIdx = i;
+      btn.innerHTML = `${ra("ra-plain-arrow")} ${escHtml(opt)}`;
+      btn.onclick = () => {
+        ws.send(JSON.stringify({ type: "dialog_choice", index: i }));
+        optsEl.querySelectorAll(".dialog-option-btn").forEach(b => b.disabled = true);
+      };
+      wrap.appendChild(btn);
+    } else {
+      const label = document.createElement("span");
+      label.className = "dialog-option-btn";
+      label.style.cssText = "opacity:0.5;cursor:default;pointer-events:none";
+      label.innerHTML = `${ra("ra-plain-arrow")} ${escHtml(opt)}`;
+      wrap.appendChild(label);
+    }
+    const tally = document.createElement("span");
+    tally.className = "dialog-vote-tally";
+    tally.dataset.optIdx = i;
+    tally.style.cssText = "font-size:0.65rem;color:#4b5563;min-width:20px";
+    wrap.appendChild(tally);
+    optsEl.appendChild(wrap);
+  });
+  document.getElementById("dialog-overlay").hidden = false;
+}
+
+function closeDialog() {
+  document.getElementById("dialog-overlay").hidden = true;
+}
+
+document.getElementById("dialog-close-btn").onclick = closeDialog;
+document.getElementById("dialog-overlay").onclick = (e) => {
+  if (e.target === document.getElementById("dialog-overlay")) closeDialog();
+};
+
+// ── TITLE POPUP ──────────────────────────────────────────────────────────────
+
+function openTitlePopup(anchorEl) {
+  const popup = document.getElementById("title-popup");
+  const rect = anchorEl.getBoundingClientRect();
+  popup.style.top  = (rect.bottom + window.scrollY + 4) + "px";
+  popup.style.left = Math.min(rect.left, window.innerWidth - 200) + "px";
+  popup.hidden = false;
+  document.getElementById("title-prefix-input").focus();
+}
+
+document.getElementById("title-save-btn").onclick = () => {
+  const prefix = document.getElementById("title-prefix-input").value.trim();
+  const suffix = document.getElementById("title-suffix-input").value.trim();
+  ws.send(JSON.stringify({ type: "set_title", prefix, suffix }));
+  document.getElementById("title-popup").hidden = true;
+};
+document.getElementById("title-clear-btn").onclick = () => {
+  document.getElementById("title-prefix-input").value = "";
+  document.getElementById("title-suffix-input").value = "";
+  ws.send(JSON.stringify({ type: "set_title", prefix: "", suffix: "" }));
+  document.getElementById("title-popup").hidden = true;
+};
+document.addEventListener("click", (e) => {
+  const popup = document.getElementById("title-popup");
+  if (!popup.hidden && !popup.contains(e.target) && e.target.id !== "my-title-btn")
+    popup.hidden = true;
+});
+
+// ── CHARACTER SHEET MODAL ────────────────────────────────────────────────────
+
+function showCharacterSheet(data) {
+  // Header
+  const offlineTag = data.offline ? `<span class="peek-offline-tag">desconectado</span>` : "";
+  document.getElementById("peek-header").innerHTML = `
+    <div class="peek-avatar">${escHtml(data.emoji || "❓")}</div>
+    <div class="peek-name-block">
+      <div class="peek-uname">${data.prefix ? `<span style="color:#a78bfa;font-style:italic;font-size:0.85rem">${escHtml(data.prefix)} </span>` : ""}${escHtml(data.username)}${data.suffix ? `<span style="color:#6b7280;font-style:italic;font-size:0.85rem"> ${escHtml(data.suffix)}</span>` : ""}${offlineTag}</div>
+      <div class="peek-class">${escHtml(data.className || "")}</div>
+    </div>
+    <div class="peek-level-badge">${ra("ra-star-swirl")} Nv.${data.level || 1}</div>
+  `;
+
+  // Vitals
+  const hpPct = Math.max(0, Math.min(100, (data.hp / data.maxHp) * 100)).toFixed(1);
+  const xpCurr = data.xpCurrent || 0;
+  const xpNext = data.xpToNext || 1;
+  const xpPct  = Math.max(0, Math.min(100, ((data.xp - xpCurr) / Math.max(1, xpNext - xpCurr)) * 100)).toFixed(1);
+  document.getElementById("peek-vitals").innerHTML = `
+    <div class="peek-section-title">Vitales</div>
+    <div class="peek-bar-row">
+      ${ra("ra-health")}
+      <div class="peek-bar-track"><div class="peek-bar-fill hp" style="width:${hpPct}%"></div></div>
+      <span class="peek-bar-label">${data.hp}/${data.maxHp}</span>
+    </div>
+    <div class="peek-bar-row">
+      ${ra("ra-star-swirl")}
+      <div class="peek-bar-track"><div class="peek-bar-fill xp" style="width:${xpPct}%"></div></div>
+      <span class="peek-bar-label">${data.xp} / ${data.xpToNext} XP</span>
+    </div>
+    <div class="peek-bar-row">${ra("ra-gold-bar")} <span style="color:#fbbf24">${data.gold || 0} monedas</span></div>
+  `;
+
+  // Stats grid
+  const st = data.stats || {};
+  const statDefs = [
+    { key: "atk", label: "ATK", icon: "ra-sword" },
+    { key: "def", label: "DEF", icon: "ra-shield" },
+    { key: "mag", label: "MAG", icon: "ra-lightning-sword" },
+    { key: "spd", label: "VEL", icon: "ra-running-ninja" },
+    { key: "crit", label: "CRIT", icon: "ra-crossed-swords" },
+    { key: "hp",  label: "HP MAX", icon: "ra-health" },
+  ];
+  document.getElementById("peek-stats-grid").innerHTML = `
+    <div class="peek-section-title" style="grid-column:1/-1">Estadísticas</div>
+    ${statDefs.map(s => `<div class="peek-stat-box">
+      <div class="sv">${st[s.key] ?? data.maxHp ?? "—"}</div>
+      <div class="sk">${ra(s.icon)} ${s.label}</div>
+    </div>`).join("")}
+  `;
+
+  // Equipment
+  const slots = [
+    { key: "weapon", icon: "ra-sword", label: "Arma" },
+    { key: "armor",  icon: "ra-shield", label: "Armadura" },
+    { key: "accessory", icon: "ra-ring", label: "Accesorio" },
+  ];
+  document.getElementById("peek-equip-section").innerHTML = `
+    <div class="peek-section-title">Equipo</div>
+    ${slots.map(s => {
+      const it = data.equipment?.[s.key];
+      const eqStats = it?.stats ? Object.entries(it.stats).filter(([,v])=>v).map(([k,v])=>`${k}:${v>0?"+":""}${v}`).join(" ") : "";
+      return `<div class="peek-eq-row">
+        <i class="ra ${s.icon}"></i> ${s.label}:
+        ${it ? `<span class="${rarityClass(it.rarity)}">${escHtml(it.name)}</span>
+                <span class="peek-eq-stats">${escHtml(eqStats)}</span>`
+             : `<span class="peek-empty">—</span>`}
+      </div>`;
+    }).join("")}
+  `;
+
+  // Inventory
+  const inv = data.inventory || [];
+  document.getElementById("peek-inv-section").innerHTML = `
+    <div class="peek-section-title">Inventario (${inv.length})</div>
+    ${inv.length === 0 ? `<div class="peek-empty">Vacío</div>` :
+      `<div class="peek-inv-list">${inv.map(i => {
+        const st2 = i.stats ? Object.entries(i.stats).filter(([,v])=>v).map(([k,v])=>`${k}:${v>0?"+":""}${v}`).join(" ") : "";
+        return `<div class="peek-inv-item">
+          <span class="${rarityClass(i.rarity)}">${escHtml(i.name)}</span>
+          <span class="item-meta">Nv.${i.level||1}${st2?" · "+escHtml(st2):""}</span>
+        </div>`;
+      }).join("")}</div>`}
+  `;
+
+  // Relations
+  const rels = data.relations || [];
+  function affinityIcon(a) {
+    if (a >= 6) return "💚";
+    if (a >= 3) return "🤝";
+    if (a >= 1) return "🙂";
+    if (a === 0) return "❓";
+    return "⚔️";
+  }
+  document.getElementById("peek-relations-section").innerHTML = `
+    <div class="peek-section-title">Relaciones</div>
+    ${rels.length === 0 ? `<div class="peek-empty">Sin relaciones registradas</div>` :
+      `<div class="peek-rel-list">${rels.map(r => `<div class="peek-rel-item">
+        <span class="peek-rel-affinity">${affinityIcon(r.affinity)}</span>
+        <div class="peek-rel-info">
+          <div class="peek-rel-name">${escHtml(r.username)}</div>
+          <div class="peek-rel-history">${(r.history || []).map(escHtml).join(" · ")}</div>
+        </div>
+      </div>`).join("")}</div>`}
+  `;
+
+  document.getElementById("peek-modal-overlay").hidden = false;
+}
+
+document.getElementById("peek-modal-overlay").addEventListener("click", (e) => {
+  if (e.target === document.getElementById("peek-modal-overlay"))
+    document.getElementById("peek-modal-overlay").hidden = true;
+});
+
+// ── SHOP ─────────────────────────────────────────────────────────────────────
+
+function renderShop(name, items) {
+  shopOpen = true;
+  document.getElementById("shop-name-label").textContent = name;
+  document.getElementById("shop-gold-amount").textContent = myGold;
+  document.getElementById("shop-btn").classList.add("visible");
+
+  const body = document.getElementById("shop-body");
+  body.innerHTML = "";
+  if (!items.length) {
+    body.innerHTML = `<div style="color:#555;font-size:0.85rem;padding:16px">Sin stock disponible</div>`;
+  }
+  for (const item of items) {
+    const card = document.createElement("div");
+    card.className = "shop-item-card";
+    const statsHtml = Object.entries(item.stats || {}).map(([s, v]) =>
+      `<span class="shop-item-stat">${ra(STAT_ICONS[s] || "ra-sword")} ${v}</span>`
+    ).join("");
+    const canAfford = myGold >= item.price;
+    const canBuy = !isGM && !!myClass;
+    card.innerHTML = `
+      <div class="shop-item-top">
+        ${ra(TYPE_ICONS[item.type] || "ra-sword")}
+        <div>
+          <div class="shop-item-name ${rarityClass(item.rarity)}">${escHtml(item.name)}</div>
+          <div class="shop-item-meta">Nv.${item.level} · ${escHtml(item.rarity)}</div>
+        </div>
+      </div>
+      <div class="shop-item-stats">${statsHtml}</div>
+      ${item.fits ? `<div class="shop-item-fits">Para: ${item.fits.join(", ")}</div>` : ""}
+      <div class="shop-item-footer">
+        <span class="shop-item-price">${ra("ra-gold-bar")} ${item.price}</span>
+        ${canBuy
+          ? `<button class="shop-buy-btn" ${canAfford ? "" : "disabled"} data-id="${escHtml(item.id)}">Comprar</button>`
+          : `<span style="font-size:0.65rem;color:#4b5563;font-style:italic">observando</span>`}
+      </div>
+    `;
+    if (canBuy) card.querySelector(".shop-buy-btn").onclick = () => {
+      ws.send(JSON.stringify({ type: "shop_buy", itemId: item.id }));
+    };
+    body.appendChild(card);
+  }
+
+  renderSellSection();
+}
+
+function renderSellSection() {
+  const section = document.getElementById("shop-sell-section");
+  const grid    = document.getElementById("shop-sell-grid");
+  if (!myInventory.length) { section.classList.remove("visible"); return; }
+  section.classList.add("visible");
+  grid.innerHTML = "";
+  for (const item of myInventory) {
+    const sell = Math.floor(shopPrice(item) * 0.35);
+    const btn = document.createElement("button");
+    btn.className = "sell-item-btn";
+    btn.innerHTML = `${ra(TYPE_ICONS[item.type] || "ra-sword")} ${escHtml(item.name)} <span class="sell-price">+${sell}💰</span>`;
+    btn.onclick = () => ws.send(JSON.stringify({ type: "sell_item", itemId: item.id }));
+    grid.appendChild(btn);
+  }
+}
+
+function closeShop() {
+  const p = document.getElementById("shop-panel");
+  p.classList.remove("open");
+  p.classList.remove("minimized");
+  document.getElementById("shop-min-btn").textContent = "—";
+}
+
+document.getElementById("shop-close-btn").onclick = closeShop;
+document.getElementById("shop-min-btn").onclick = () => {
+  document.getElementById("shop-panel").classList.toggle("minimized");
+  document.getElementById("shop-min-btn").textContent =
+    document.getElementById("shop-panel").classList.contains("minimized") ? "▲" : "—";
+};
+document.getElementById("vote-min-btn").onclick = () => {
+  const vp = document.getElementById("vote-panel");
+  vp.classList.toggle("minimized");
+  document.getElementById("vote-min-btn").textContent = vp.classList.contains("minimized") ? "▲" : "—";
+};
+document.getElementById("shop-btn").onclick = () => {
+  document.getElementById("shop-gold-amount").textContent = myGold;
+  renderSellSection();
+  document.getElementById("shop-panel").classList.toggle("open");
+};
+
+// Turn timer
+let _timerRAF = null, _timerEnd = 0, _timerDuration = 0, _timerPlayer = null;
+
+function startTurnTimer(player, durationMs) {
+  stopTurnTimer();
+  _timerPlayer   = player;
+  _timerDuration = durationMs;
+  _timerEnd      = performance.now() + durationMs;
+
+  const bar   = document.getElementById("turn-timer-bar");
+  const fill  = document.getElementById("turn-timer-fill");
+  const label = document.getElementById("turn-timer-label");
+  bar.hidden = false;
+
+  function tick() {
+    const remaining = Math.max(0, _timerEnd - performance.now());
+    const pct = remaining / _timerDuration;
+    fill.style.transform = `scaleX(${pct})`;
+
+    const secs  = Math.ceil(remaining / 1000);
+    const mins  = Math.floor(secs / 60);
+    const s     = String(secs % 60).padStart(2, "0");
+    label.textContent = `${mins}:${s}`;
+
+    const urgent = remaining < 30000;
+    fill.className  = urgent ? "urgent" : "";
+    label.className = urgent ? "urgent" : "";
+
+    if (remaining > 0) _timerRAF = requestAnimationFrame(tick);
+    else stopTurnTimer();
+  }
+  _timerRAF = requestAnimationFrame(tick);
+}
+
+function stopTurnTimer() {
+  if (_timerRAF) { cancelAnimationFrame(_timerRAF); _timerRAF = null; }
+  document.getElementById("turn-timer-bar").hidden = true;
+  const fill  = document.getElementById("turn-timer-fill");
+  const label = document.getElementById("turn-timer-label");
+  fill.style.transform = "scaleX(1)";
+  fill.className = "";
+  label.textContent = "2:00";
+  label.className = "";
+  _timerPlayer = null;
+}
+
+// ── LOOT TIMER ────────────────────────────────────────────────────────────────
+let _lootRAF = null, _lootEnd = 0, _lootDuration = 0;
+
+function startLootTimer(durationMs) {
+  stopLootTimer();
+  _lootDuration = durationMs;
+  _lootEnd = performance.now() + durationMs;
+  const fill = document.getElementById("loot-timer-fill");
+  function tick() {
+    const remaining = Math.max(0, _lootEnd - performance.now());
+    fill.style.transform = `scaleX(${remaining / _lootDuration})`;
+    fill.className = remaining < 15000 ? "urgent" : "";
+    if (remaining > 0) _lootRAF = requestAnimationFrame(tick);
+    else stopLootTimer();
+  }
+  _lootRAF = requestAnimationFrame(tick);
+}
+
+function stopLootTimer() {
+  if (_lootRAF) { cancelAnimationFrame(_lootRAF); _lootRAF = null; }
+  const fill = document.getElementById("loot-timer-fill");
+  if (fill) { fill.style.transform = "scaleX(1)"; fill.className = ""; }
+}
+
+// ── ICONOS ───────────────────────────────────────────────────────────────────
+
+const CLASS_ICONS = {
+  warrior: "ra-sword",
+  mage:    "ra-crystal-wand",
+  rogue:   "ra-dagger",
+  cleric:  "ra-holy-symbol",
+};
+
+const SKILL_ICONS = {
+  slash:        "ra-sword",
+  shield_bash:  "ra-shield",
+  berserk:      "ra-fire",
+  fireball:     "ra-fire",
+  ice_shield:   "ra-snowflake",
+  arcane_burst: "ra-lightning-bolt",
+  backstab:     "ra-dagger",
+  smoke_bomb:   "ra-smoke",
+  poison:       "ra-skull",
+  holy_strike:  "ra-sun",
+  heal:         "ra-health",
+  blessing:     "ra-angel-wing",
+  attack:       "ra-sword",
+  defend:       "ra-shield",
+  // level skills
+  lvlsk_2:      "ra-sword",
+  lvlsk_3:      "ra-star",
+  lvlsk_4:      "ra-star",
+  lvlsk_5:      "ra-star",
+};
+
+const STATUS_ICONS = {
+  poison:        "ra-skull",
+  bleed:         "ra-health",
+  shield:        "ra-shield",
+  blessing:      "ra-angel-wing",
+  dodge:         "ra-smoke",
+  stun:          "ra-lightning-bolt",
+  arcane_exhaust:"ra-crystal-wand",
+  battle_cry:    "ra-sword",
+  mana_shield:   "ra-crystal-wand",
+  divine_shield: "ra-sun",
+  defending:     "ra-shield",
+};
+
+const STAT_ICONS = {
+  atk:  "ra-sword",
+  def:  "ra-shield",
+  mag:  "ra-crystal-wand",
+  hp:   "ra-health",
+  spd:  "ra-plain-arrow",
+  crit: "ra-archery",
+};
+
+const TYPE_ICONS = {
+  weapon:    "ra-sword",
+  armor:     "ra-shield",
+  accessory: "ra-ring",
+};
+
+function ra(icon, extra = "") {
+  return `<i class="ra ${icon}${extra ? ' ' + extra : ''}"></i>`;
+}
+
+function classIcon(key) { return ra(CLASS_ICONS[key] || "ra-sword"); }
+function skillIcon(key) { return ra(SKILL_ICONS[key] || "ra-sword"); }
+function statusIcon(type) { return ra(STATUS_ICONS[type] || "ra-fire"); }
+
+function rarityClass(r) {
+  const m = { common: "rarity-common", uncommon: "rarity-uncommon", rare: "rarity-rare", legendary: "rarity-legendary" };
+  return m[r] || "rarity-common";
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+
+function escHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = String(s ?? "");
+  return d.innerHTML;
+}
+function show(id) { document.getElementById(id).classList.add("active"); }
+function hide(id) { document.getElementById(id).classList.remove("active"); }
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+
+document.getElementById("login-form").onsubmit = (e) => {
+  e.preventDefault();
+  const name = document.getElementById("username-input").value.trim();
+  if (!name) return;
+  myUsername = name;
+  isGM = document.getElementById("gm-check").checked;
+  hide("screen-login");
+  connect();
+};
+
+function connect() {
+  ws = new WebSocket(`ws://${location.host}`);
+  ws.onopen  = () => ws.send(JSON.stringify({ type: "join", username: myUsername, role: isGM ? "gm" : "player" }));
+  ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
+  ws.onclose = () => sysMsg(`${ra("ra-skull")} Conexión perdida`);
+}
+
+// ── MENSAJES ENTRANTES ────────────────────────────────────────────────────────
+
+function handleMessage(msg) {
+  switch (msg.type) {
+    case "classes":
+      classesData = msg.classes;
+      if (isGM) show("screen-chat");
+      else showClassSelect(msg.classes);
+      break;
+    case "message":
+      addMsg(msg.username === myUsername ? "mine" : "other", escHtml(msg.text), msg.username);
+      break;
+    case "system":
+      sysMsg(escHtml(msg.text));
+      break;
+    case "gm_scenario":
+      addRawMsg("gm-scenario", `${ra("ra-scroll-unfurled")} <span>${escHtml(msg.text)}</span>`);
+      break;
+    case "gm_event":
+      addRawMsg("gm-event", `${ra("ra-pentagram")} <span>${escHtml(msg.text)}</span>`);
+      break;
+    case "game_state":
+      gameState = msg;
+      renderState(msg);
+      break;
+    case "your_turn":
+      isMyTurn = true;
+      mySkills = msg.skills;
+      showTurnUI(msg.skills);
+      break;
+    case "enemy_turn":
+      sysMsg(`${ra("ra-dragon")} Turno de ${escHtml(msg.enemy)} — GM: <code>/gm enemy_attack ${escHtml(msg.enemy)} [jugador]</code>`);
+      break;
+    case "error":
+      sysMsg(`${ra("ra-warning")} ${escHtml(msg.text)}`);
+      break;
+    case "users":
+      document.getElementById("header-users").innerHTML = `${ra("ra-player")} ${msg.users.length} online`;
+      break;
+    case "welcome":
+      showWelcome(msg.isGM, msg.hasGM);
+      break;
+    case "duel_challenge":
+    case "duel_started":
+    case "duel_state":
+    case "duel_your_turn":
+    case "duel_wait":
+    case "duel_ended":
+    case "duel_expired":
+    case "duel_rejected":
+      handleDuelMessage(msg);
+      break;
+    case "inventory_update":
+      myInventory = msg.inventory || [];
+      myEquipment = msg.equipment || { weapon: null, armor: null, accessory: null };
+      refreshInventoryPanel();
+      if (shopOpen) renderSellSection();
+      break;
+    case "loot_vote":
+      hasVoted = false;
+      document.getElementById("vote-panel").classList.remove("minimized");
+      document.getElementById("vote-min-btn").textContent = "—";
+      renderVotePanel(msg);
+      break;
+    case "vote_update": {
+      document.getElementById("vote-count").textContent = msg.votedCount;
+      document.getElementById("vote-total").textContent = msg.totalCount;
+      const bkEl = document.getElementById("vote-breakdown");
+      if (bkEl) {
+        if (msg.breakdown) {
+          bkEl.innerHTML = `<span style="color:#7c3aed">N:${msg.breakdown.need}</span> <span style="color:#b45309">G:${msg.breakdown.greed}</span> <span style="color:#374151">P:${msg.breakdown.pass}</span>`;
+        } else if (msg.council) {
+          bkEl.innerHTML = Object.entries(msg.council).map(([u,c])=>`${escHtml(u)}:${c}`).join(" · ");
+        }
+      }
+      break;
+    }
+    case "loot_awarded":
+      stopLootTimer();
+      document.getElementById("vote-panel").hidden = true;
+      hasVoted = false;
+      break;
+    case "loot_timer_start":
+      startLootTimer(msg.duration);
+      break;
+    case "loot_timer_stop":
+      stopLootTimer();
+      break;
+    case "character_sheet":
+      showCharacterSheet(msg);
+      break;
+    case "turn_timer_start":
+      startTurnTimer(msg.player, msg.duration);
+      break;
+    case "turn_timer_stop":
+      stopTurnTimer();
+      break;
+    case "combat_hit":
+      if (msg.aoe) animateLungeAoe(msg.attacker, msg.atkIsEnemy, msg.targets);
+      else animateLunge(msg.attacker, msg.atkIsEnemy, msg.target, msg.tgtIsEnemy);
+      break;
+    case "unit_died":
+      animateEnemyDeath(msg.name);
+      break;
+    case "gold_update":
+      myGold = msg.gold;
+      document.getElementById("shop-gold-amount").textContent = myGold;
+      break;
+    case "dialog":
+      showDialog(msg.npc, msg.text, msg.options);
+      break;
+    case "dialog_close":
+      closeDialog();
+      break;
+    case "dialog_vote_update":
+      (msg.tally || []).forEach((count, i) => {
+        const el = document.querySelector(`.dialog-vote-tally[data-opt-idx="${i}"]`);
+        if (el) el.textContent = count > 0 ? `×${count}` : "";
+      });
+      break;
+    case "shop_open":
+      renderShop(msg.name, msg.items);
+      document.getElementById("shop-panel").classList.add("open");
+      break;
+    case "shop_update":
+      if (shopOpen) renderShop(document.getElementById("shop-name-label").textContent, msg.items);
+      break;
+    case "shop_closed":
+      shopOpen = false;
+      document.getElementById("shop-btn").classList.remove("visible");
+      closeShop();
+      sysMsg(`${ra("ra-coins")} La tienda cerró`);
+      break;
+    case "adventure_reset":
+      // Reset all local player state
+      myClass     = null;
+      isMyTurn    = false;
+      mySkills    = [];
+      myInventory = [];
+      myEquipment = { weapon: null, armor: null, accessory: null };
+      myGold      = 0;
+      hasVoted    = false;
+      shopOpen    = false;
+      prevLevels  = {};
+      dyingEnemies.clear();
+      // Close open panels
+      stopTurnTimer();
+      stopLootTimer();
+      closeDialog();
+      closeShop();
+      document.getElementById("shop-btn").classList.remove("visible");
+      document.getElementById("vote-panel").hidden = true;
+      document.getElementById("inventory-panel").classList.remove("open");
+      document.getElementById("duel-hud").hidden = true;
+      document.getElementById("duel-challenge-banner").hidden = true;
+      hideTurnUI();
+      // GMs stay on chat; players pick class again
+      if (isGM) {
+        // already on chat screen, nothing to do
+      } else {
+        hide("screen-chat");
+        classesData = msg.classes;
+        showClassSelect(msg.classes);
+      }
+      break;
+  }
+}
+
+// ── SELECCIÓN DE CLASE ────────────────────────────────────────────────────────
+
+function showClassSelect(classes) {
+  show("screen-class");
+  const grid = document.getElementById("class-grid");
+  grid.innerHTML = "";
+  for (const cls of classes) {
+    const s = cls.stats;
+    const card = document.createElement("div");
+    card.className = "class-card";
+    card.innerHTML = `
+      <div class="class-icon">${ra(CLASS_ICONS[cls.key] || "ra-sword")}</div>
+      <div class="class-name">${escHtml(cls.name)}</div>
+      <div class="class-stats">
+        <span class="stat-row">${ra("ra-health")} HP ${s.hp}</span>
+        <span class="stat-row">${ra("ra-sword")} ATK ${s.atk}</span>
+        <span class="stat-row">${ra("ra-shield")} DEF ${s.def}</span>
+        <span class="stat-row">${ra("ra-crystal-wand")} MAG ${s.mag}</span>
+        <span class="stat-row">${ra("ra-plain-arrow")} SPD ${s.spd}</span>
+        <span class="stat-row">${ra("ra-archery")} CRIT ${s.crit}%</span>
+      </div>
+      <div class="class-skills">
+        ${cls.skills.map(sk => `
+          <div class="skill-row">
+            ${skillIcon(sk.key)}
+            <span class="skill-name">${escHtml(sk.name)}</span>
+          </div>
+          <div class="skill-row" style="margin-bottom:4px">
+            <span style="width:14px"></span>
+            <span class="skill-desc">${escHtml(sk.desc)}</span>
+          </div>
+        `).join("")}
+      </div>
+    `;
+    card.onclick = () => chooseClass(cls.key);
+    grid.appendChild(card);
+  }
+}
+
+document.getElementById("skip-class").onclick = () => { hide("screen-class"); show("screen-chat"); };
+
+function chooseClass(key) {
+  myClass = key;
+  ws.send(JSON.stringify({ type: "choose_class", class: key }));
+  hide("screen-class");
+  show("screen-chat");
+}
+
+// ── RENDER ESTADO ─────────────────────────────────────────────────────────────
+
+function renderState(state) {
+  // Fase
+  const phaseEl = document.getElementById("header-phase");
+  const phases = {
+    lobby:     `${ra("ra-castle-emblem")} Lobby`,
+    adventure: `${ra("ra-plain-arrow")} Aventura`,
+    combat:    `${ra("ra-crossed-swords")} Combate`,
+  };
+  phaseEl.innerHTML = phases[state.phase] || state.phase;
+  phaseEl.className = state.phase === "combat" ? "combat" : "";
+
+  if (state.scenario) {
+    document.getElementById("header-scenario").innerHTML = `${ra("ra-scroll-unfurled")} ${escHtml(state.scenario)}`;
+  }
+
+  // Jugadores
+  const pl = document.getElementById("player-list");
+  pl.innerHTML = "";
+  for (const p of state.players) {
+    const isCurrent = state.currentTurn?.name === p.username;
+    const isMe = p.username === myUsername;
+    const pct = p.hp / p.maxHp;
+    const barCls = pct > 0.5 ? "" : pct > 0.25 ? "medium" : "low";
+
+    // XP bar
+    const xpCurr = p.xpCurrent || 0;
+    const xpNext = p.xpToNext || 1;
+    const xpPct = Math.min(100, Math.max(0, ((p.xp - xpCurr) / Math.max(1, xpNext - xpCurr)) * 100)).toFixed(1);
+
+    const badges = p.status.map(s =>
+      `<span class="badge ${s.type}">${statusIcon(s.type)} ${s.type}${s.turns ? ` ${s.turns}t` : ""}</span>`
+    ).join("");
+    const defBadge = p.isDefending ? `<span class="badge defending">${ra("ra-shield")} def</span>` : "";
+
+    // Equipment summary
+    const eqParts = [];
+    if (p.equipment) {
+      if (p.equipment.weapon)    eqParts.push(`${ra("ra-sword")} <span class="${rarityClass(p.equipment.weapon.rarity)}">${escHtml(p.equipment.weapon.name)}</span>`);
+      if (p.equipment.armor)     eqParts.push(`${ra("ra-shield")} <span class="${rarityClass(p.equipment.armor.rarity)}">${escHtml(p.equipment.armor.name)}</span>`);
+      if (p.equipment.accessory) eqParts.push(`${ra("ra-ring")} <span class="${rarityClass(p.equipment.accessory.rarity)}">${escHtml(p.equipment.accessory.name)}</span>`);
+    }
+
+    // Level-up flash
+    const levelChanged = prevLevels[p.username] !== undefined && prevLevels[p.username] < p.level;
+    prevLevels[p.username] = p.level;
+
+    const card = document.createElement("div");
+    let cardClass = `player-card${isCurrent ? " current-turn" : ""}${isMe ? " mine" : ""}`;
+    if (levelChanged) cardClass += " levelup-flash";
+    if (p.offline) cardClass += " offline";
+    card.className = cardClass;
+    card.dataset.username = p.username;
+    const offlineBadge = p.offline ? `<span class="offline-badge">(desconectado)</span>` : "";
+    const peekBtn = !isMe ? `<button class="peek-inv-btn" data-peek="${escHtml(p.username)}">${ra("ra-player")} Ver personaje</button>` : "";
+    const prefix = p.prefix ? `<span class="player-prefix">${escHtml(p.prefix)}</span> ` : "";
+    const suffix = p.suffix ? ` <span class="player-suffix">${escHtml(p.suffix)}</span>` : "";
+    const editTitleBtn = isMe ? `<button class="edit-title-btn" id="my-title-btn" title="Editar título">✏️</button>` : "";
+    card.innerHTML = `
+      <div class="player-name">
+        <span class="class-ico">${ra(CLASS_ICONS[p.classKey] || "ra-player")}</span>
+        ${prefix}${escHtml(p.username)}${suffix}${offlineBadge}
+        ${editTitleBtn}
+        ${isCurrent ? `<span class="turn-ico">${ra("ra-dice-six")}</span>` : ""}
+      </div>
+      <div class="player-class">${escHtml(p.className || "")}</div>
+      <div class="player-level">${ra("ra-star-swirl")} Nv.${p.level || 1}</div>
+      <div class="hp-bar-wrap"><div class="hp-bar ${barCls}" style="width:${Math.max(0, pct * 100).toFixed(1)}%"></div></div>
+      <div class="hp-text">${ra("ra-health")} ${p.hp}/${p.maxHp}</div>
+      <div class="xp-bar-wrap"><div class="xp-bar" style="width:${xpPct}%"></div></div>
+      <div class="xp-text">${p.xp || 0} / ${p.xpToNext || 100} XP</div>
+      <div class="gold-text">${ra("ra-gold-bar")} ${p.gold || 0}</div>
+      ${eqParts.length ? `<div class="equip-summary">${eqParts.join(" ")}</div>` : ""}
+      ${badges || defBadge ? `<div class="status-badges">${badges}${defBadge}</div>` : ""}
+      ${peekBtn}
+    `;
+    card.querySelector("[data-peek]")?.addEventListener("click", (e) => {
+      ws.send(JSON.stringify({ type: "peek_inventory", username: e.currentTarget.dataset.peek }));
+    });
+    card.querySelector("#my-title-btn")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openTitlePopup(e.currentTarget);
+    });
+    pl.appendChild(card);
+  }
+
+  // Enemigos
+  const el = document.getElementById("enemy-list");
+  el.innerHTML = "";
+  for (const e of state.enemies) {
+    const isCurrent = state.currentTurn?.name === e.name;
+    const pct = e.hp / e.maxHp;
+    const barCls = pct > 0.5 ? "" : pct > 0.25 ? "medium" : "low";
+    const badges = (e.status || []).map(s =>
+      `<span class="badge ${s.type}">${statusIcon(s.type)} ${s.type}${s.turns ? ` ${s.turns}t` : ""}</span>`
+    ).join("");
+
+    if (dyingEnemies.has(e.name) || e.hp <= 0) continue; // let death animation finish
+    const tier = e.tier || "normal";
+    // Icon: custom emoji/ra-class, or tier default
+    let enemyIcon;
+    if (e.icon) {
+      enemyIcon = e.icon.startsWith("ra-") ? `<i class="ra ${escHtml(e.icon)}"></i>` : escHtml(e.icon);
+    } else {
+      enemyIcon = tier === "boss" ? ra("ra-skull") : tier === "elite" ? ra("ra-lightning-sword") : ra("ra-dragon");
+    }
+    const tierBadge = tier !== "normal"
+      ? `<span class="tier-badge ${tier}">${tier === "boss" ? "☠ jefe" : "⚡ élite"}</span>`
+      : "";
+    const nameStyle = e.color ? ` style="color:${escHtml(e.color)}"` : "";
+    const card = document.createElement("div");
+    card.className = `enemy-card${tier !== "normal" ? " " + tier : ""}${isCurrent ? " current-turn" : ""}`;
+    card.dataset.enemy = e.name;
+    card.innerHTML = `
+      <div class="enemy-name">
+        ${enemyIcon} <span${nameStyle}>${escHtml(e.name)}</span>${tierBadge}
+        ${isCurrent ? `<span class="turn-ico">${ra("ra-dice-six")}</span>` : ""}
+      </div>
+      <div class="enemy-stats">
+        <span>${ra("ra-sword")} ${e.atk}</span>
+        <span>${ra("ra-shield")} ${e.def}</span>
+      </div>
+      <div class="hp-bar-wrap"><div class="hp-bar ${barCls}" style="width:${Math.max(0, pct * 100).toFixed(1)}%"></div></div>
+      <div class="hp-text">${ra("ra-health")} ${e.hp}/${e.maxHp}</div>
+      ${badges ? `<div class="status-badges">${badges}</div>` : ""}
+    `;
+    el.appendChild(card);
+  }
+
+  // Ocultar UI de turno si ya no es el mío
+  if (state.currentTurn?.name !== myUsername && isMyTurn) {
+    isMyTurn = false;
+    hideTurnUI();
+  }
+}
+
+// ── UI DE TURNO ───────────────────────────────────────────────────────────────
+
+function showTurnUI(skills) {
+  document.getElementById("turn-banner").style.display = "flex";
+  const row = document.getElementById("skills-row");
+  row.removeAttribute("hidden");
+  row.innerHTML = "";
+
+  // Ataque básico
+  const atkBtn = makeSkillBtn("ra-sword", "Atacar", false, () => {
+    const tgt = document.getElementById("target-input").value.trim();
+    if (!tgt) { sysMsg(`${ra("ra-warning")} Escribe el objetivo primero`); return; }
+    ws.send(JSON.stringify({ type: "action", action: "attack", target: tgt }));
+    document.getElementById("target-input").value = "";
+    isMyTurn = false; hideTurnUI();
+  });
+  row.appendChild(atkBtn);
+
+  for (const sk of skills) {
+    const btn = makeSkillBtn(SKILL_ICONS[sk.key] || "ra-sword", sk.name, !sk.available, () => {
+      const tgt = document.getElementById("target-input").value.trim();
+      ws.send(JSON.stringify({ type: "action", action: "skill", skill: sk.key, target: tgt || undefined }));
+      document.getElementById("target-input").value = "";
+      isMyTurn = false; hideTurnUI();
+    });
+    btn.title = sk.desc;
+    row.appendChild(btn);
+  }
+
+  // Defender
+  const defBtn = makeSkillBtn("ra-shield", "Defender", false, () => {
+    ws.send(JSON.stringify({ type: "action", action: "defend" }));
+    isMyTurn = false; hideTurnUI();
+  });
+  row.appendChild(defBtn);
+
+  // Skipear turno
+  const skipBtn = makeSkillBtn("ra-double-team", "Pasar", false, () => {
+    ws.send(JSON.stringify({ type: "action", action: "skip" }));
+    isMyTurn = false; hideTurnUI();
+  });
+  skipBtn.style.opacity = "0.55";
+  row.appendChild(skipBtn);
+
+  document.getElementById("target-row").removeAttribute("hidden");
+}
+
+function makeSkillBtn(icon, label, disabled, onclick) {
+  const btn = document.createElement("button");
+  btn.className = "skill-btn";
+  btn.innerHTML = `${ra(icon)} ${escHtml(label)}`;
+  btn.disabled = disabled;
+  btn.onclick = onclick;
+  return btn;
+}
+
+function hideTurnUI() {
+  document.getElementById("turn-banner").style.display = "none";
+  document.getElementById("skills-row").setAttribute("hidden", "");
+  document.getElementById("target-row").setAttribute("hidden", "");
+  stopTurnTimer();
+}
+
+// ── INVENTARIO ────────────────────────────────────────────────────────────────
+
+document.getElementById("inventory-btn").onclick = () => {
+  document.getElementById("inventory-panel").classList.toggle("open");
+};
+
+document.getElementById("inventory-close").onclick = () => {
+  document.getElementById("inventory-panel").classList.remove("open");
+};
+
+// Unequip buttons
+document.querySelectorAll(".equip-unequip-btn").forEach(btn => {
+  btn.onclick = () => {
+    ws.send(JSON.stringify({ type: "unequip", slot: btn.dataset.slot }));
+  };
+});
+
+function refreshInventoryPanel() {
+  // Update equipment slots
+  const slots = ["weapon", "armor", "accessory"];
+  for (const slot of slots) {
+    const item = myEquipment[slot];
+    const nameEl = document.getElementById(`slot-${slot}-name`);
+    const unequipBtn = document.querySelector(`.equip-unequip-btn[data-slot="${slot}"]`);
+    if (item) {
+      nameEl.textContent = item.name;
+      nameEl.className = `equip-slot-item equipped ${rarityClass(item.rarity)}`;
+      if (unequipBtn) unequipBtn.style.display = "";
+    } else {
+      nameEl.textContent = "— vacío —";
+      nameEl.className = "equip-slot-item";
+      if (unequipBtn) unequipBtn.style.display = "none";
+    }
+  }
+
+  // Render inventory grid
+  const grid = document.getElementById("inventory-grid");
+  grid.innerHTML = "";
+  if (myInventory.length === 0) {
+    grid.innerHTML = `<div style="color:#444;font-size:0.8rem;padding:8px;">Inventario vacío</div>`;
+    return;
+  }
+  for (const item of myInventory) {
+    const card = document.createElement("div");
+    card.className = "item-card";
+    const statsHtml = Object.entries(item.stats || {}).map(([stat, val]) =>
+      `<span class="item-stat">${ra(STAT_ICONS[stat] || "ra-sword")} ${val}</span>`
+    ).join("");
+    card.innerHTML = `
+      <div class="item-card-top">
+        <span class="item-type-icon ${rarityClass(item.rarity)}">${ra(TYPE_ICONS[item.type] || "ra-sword")}</span>
+        <div>
+          <div class="item-name ${rarityClass(item.rarity)}">${escHtml(item.name)}</div>
+          <div class="item-level">Nv.${item.level} · ${escHtml(item.rarity)}</div>
+        </div>
+      </div>
+      <div class="item-stats">${statsHtml}</div>
+      <div class="item-buttons">
+        <button class="item-equip-btn">Equipar</button>
+        <button class="item-drop-btn">Botar</button>
+      </div>
+    `;
+    card.querySelector(".item-equip-btn").onclick = () => {
+      ws.send(JSON.stringify({ type: "equip", itemId: item.id }));
+    };
+    card.querySelector(".item-drop-btn").onclick = () => {
+      ws.send(JSON.stringify({ type: "drop_item", itemId: item.id }));
+    };
+    grid.appendChild(card);
+  }
+}
+
+// ── VOTE PANEL ────────────────────────────────────────────────────────────────
+
+function renderVotePanel(msg) {
+  const item = msg.item;
+  const mode = msg.mode;
+  const panel = document.getElementById("vote-panel");
+  panel.hidden = false;
+
+  // Item info
+  document.getElementById("vote-item-icon").innerHTML = `<span class="${rarityClass(item.rarity)}">${ra(TYPE_ICONS[item.type] || "ra-gem")}</span>`;
+  document.getElementById("vote-item-name").innerHTML = `<span class="${rarityClass(item.rarity)}">${escHtml(item.name)}</span>`;
+  document.getElementById("vote-item-meta").textContent = `${item.rarity} · Nv.${item.level}`;
+  document.getElementById("vote-item-stats").innerHTML = Object.entries(item.stats || {})
+    .map(([s, v]) => `<span>${ra(STAT_ICONS[s] || "ra-sword")} ${v}</span>`).join("");
+
+  const actions = document.getElementById("vote-actions");
+  const modeLabel = document.getElementById("vote-mode-label");
+  const votedLabel = document.getElementById("vote-voted-label");
+  votedLabel.style.display = "none";
+  actions.innerHTML = "";
+  actions.appendChild(modeLabel);
+  actions.appendChild(votedLabel);
+  const bkEl = document.getElementById("vote-breakdown");
+  if (bkEl) bkEl.innerHTML = "";
+
+  function markVoted() {
+    hasVoted = true;
+    actions.querySelectorAll(".vote-btn").forEach(b => b.disabled = true);
+    votedLabel.style.display = "inline-flex";
+  }
+
+  const canVote = !isGM && !!myClass;
+
+  if (!canVote) {
+    modeLabel.textContent = mode === "need_greed" ? "Need/Greed/Pass" : "Sistema Consejo";
+    const obs = document.createElement("span");
+    obs.style.cssText = "font-size:0.7rem;color:#4b5563;font-style:italic";
+    obs.textContent = " — solo observando";
+    actions.appendChild(obs);
+    return;
+  }
+
+  if (mode === "need_greed") {
+    modeLabel.textContent = "Need/Greed/Pass:";
+    const btns = [
+      { cls: "need",  icon: "ra-sword",      label: "Need",  action: "need"  },
+      { cls: "greed", icon: "ra-gem",         label: "Greed", action: "greed" },
+      { cls: "pass",  icon: "ra-plain-arrow", label: "Pass",  action: "pass"  },
+    ];
+    for (const b of btns) {
+      const btn = document.createElement("button");
+      btn.className = `vote-btn ${b.cls}`;
+      btn.innerHTML = `${ra(b.icon)} ${b.label}`;
+      btn.disabled = hasVoted;
+      btn.onclick = () => {
+        ws.send(JSON.stringify({ type: "vote", action: b.action }));
+        markVoted();
+      };
+      actions.appendChild(btn);
+    }
+  } else {
+    modeLabel.textContent = "Sistema Consejo:";
+    const eligible = msg.eligible || [];
+    for (const username of eligible) {
+      const btn = document.createElement("button");
+      btn.className = "vote-btn council";
+      btn.innerHTML = `${ra("ra-player")} ${escHtml(username)}`;
+      btn.disabled = hasVoted;
+      btn.onclick = () => {
+        ws.send(JSON.stringify({ type: "voteitem", target: username }));
+        markVoted();
+      };
+      actions.appendChild(btn);
+    }
+    modeLabel.textContent += " (/voteitem <nombre>)";
+  }
+}
+
+// ── MENSAJES ──────────────────────────────────────────────────────────────────
+
+function sysMsg(html) { addRawMsg("system", html); }
+
+function addMsg(type, html, author) {
+  const div = document.createElement("div");
+  div.className = `msg ${type}`;
+  if (author && type === "other") div.innerHTML = `<div class="author">${escHtml(author)}</div>`;
+  div.innerHTML += html;
+  appendMsg(div);
+}
+
+function addRawMsg(type, html) {
+  const div = document.createElement("div");
+  div.className = `msg ${type}`;
+  div.innerHTML = html;
+  appendMsg(div);
+}
+
+function appendMsg(div) {
+  const m = document.getElementById("mensajes");
+  m.appendChild(div);
+  m.scrollTop = m.scrollHeight;
+}
+
+// ── FORMULARIO ────────────────────────────────────────────────────────────────
+
+document.getElementById("form").onsubmit = (e) => {
+  e.preventDefault();
+  const val = document.getElementById("input").value.trim();
+  if (!val) return;
+  document.getElementById("input").value = "";
+
+  if (val.startsWith("/gm ")) {
+    const rest = val.slice(4).trim();
+    const sp = rest.indexOf(" ");
+    const action = sp >= 0 ? rest.slice(0, sp) : rest;
+    const body   = sp >= 0 ? rest.slice(sp + 1).trim() : "";
+
+    if (action === "scenario") {
+      ws.send(JSON.stringify({ type: "gm", action: "scenario", text: body }));
+    } else if (action === "event") {
+      ws.send(JSON.stringify({ type: "gm", action: "event", text: body }));
+    } else if (action === "combat_start") {
+      ws.send(JSON.stringify({ type: "gm", action: "combat_start" }));
+    } else if (action === "combat_end") {
+      ws.send(JSON.stringify({ type: "gm", action: "combat_end" }));
+    } else if (action === "reward") {
+      ws.send(JSON.stringify({ type: "gm", action: "reward", text: body }));
+    } else if (action === "enemy" || action === "spawn_enemy") {
+      const p = body.split(" ");
+      ws.send(JSON.stringify({ type: "gm", action: "spawn_enemy", name: p[0], hp: +p[1]||50, atk: +p[2]||10, def: +p[3]||5, spd: +p[4]||5 }));
+    } else if (action === "enemy_attack") {
+      const p = body.split(" ");
+      ws.send(JSON.stringify({ type: "gm", action: "enemy_attack", enemy: p[0], target: p[1] }));
+    } else if (action === "loot") {
+      const p = body.split(" ");
+      ws.send(JSON.stringify({ type: "gm", action: "loot", level: +p[0]||1, count: +p[1]||1, mode: p[2] || undefined }));
+    } else if (action === "lootmode") {
+      ws.send(JSON.stringify({ type: "gm", action: "lootmode", mode: body.trim() }));
+    }
+    return;
+  }
+
+  if (val.startsWith("/vote ") || val === "/vote") {
+    const action = val.slice(6).trim();
+    ws.send(JSON.stringify({ type: "vote", action }));
+    return;
+  }
+
+  if (val.startsWith("/voteitem ")) {
+    const target = val.slice(10).trim();
+    if (target) ws.send(JSON.stringify({ type: "voteitem", target }));
+    return;
+  }
+
+  if (val.startsWith("/duel ")) {
+    const target = val.slice(6).trim();
+    if (target === "accept")  ws.send(JSON.stringify({ type: "duel", action: "accept" }));
+    else if (target === "reject")  ws.send(JSON.stringify({ type: "duel", action: "reject" }));
+    else if (target === "forfeit") ws.send(JSON.stringify({ type: "duel", action: "forfeit" }));
+    else if (target)               ws.send(JSON.stringify({ type: "duel", action: "challenge", target }));
+    return;
+  }
+
+  if (val.startsWith("/prefix ") || val === "/prefix") {
+    const v = val.slice(8).trim();
+    ws.send(JSON.stringify({ type: "set_title", prefix: v }));
+    return;
+  }
+  if (val.startsWith("/suffix ") || val === "/suffix") {
+    const v = val.slice(8).trim();
+    ws.send(JSON.stringify({ type: "set_title", suffix: v }));
+    return;
+  }
+  if (val === "/title clear") {
+    ws.send(JSON.stringify({ type: "set_title", prefix: "", suffix: "" }));
+    return;
+  }
+
+  if (val.startsWith("/rename ")) {
+    const n = val.slice(8).trim();
+    if (n) { ws.send(JSON.stringify({ type: "rename", newUsername: n })); myUsername = n; }
+    return;
+  }
+
+  ws.send(JSON.stringify({ type: "message", text: val }));
+};
+
+// ── DUELOS ────────────────────────────────────────────────────────────────────
+
+let activeDuelId = null;
+let pendingDuelId = null;
+let isDuelTurn = false;
+
+// challenge notification buttons
+document.getElementById("duel-accept-btn").onclick = () => {
+  ws.send(JSON.stringify({ type: "duel", action: "accept" }));
+  document.getElementById("duel-challenge-banner").hidden = true;
+};
+document.getElementById("duel-reject-btn").onclick = () => {
+  ws.send(JSON.stringify({ type: "duel", action: "reject" }));
+  document.getElementById("duel-challenge-banner").hidden = true;
+};
+document.getElementById("duel-forfeit-btn").onclick = () => {
+  if (confirm("¿Seguro que quieres rendirte?"))
+    ws.send(JSON.stringify({ type: "duel", action: "forfeit" }));
+};
+
+function handleDuelMessage(msg) {
+  switch (msg.type) {
+    case "duel_challenge": {
+      pendingDuelId = msg.duelId;
+      document.getElementById("duel-challenger-name").textContent = msg.challenger;
+      document.getElementById("duel-challenge-banner").hidden = false;
+      // auto-hide after 30s
+      setTimeout(() => { document.getElementById("duel-challenge-banner").hidden = true; }, 30000);
+      break;
+    }
+    case "duel_started": {
+      activeDuelId = msg.duelId;
+      document.getElementById("duel-hud").hidden = false;
+      break;
+    }
+    case "duel_state": {
+      if (!msg.players) break;
+      renderDuelHud(msg);
+      break;
+    }
+    case "duel_your_turn": {
+      activeDuelId = msg.duelId;
+      isDuelTurn = true;
+      showDuelTurnUI(msg.skills);
+      break;
+    }
+    case "duel_wait": {
+      isDuelTurn = false;
+      hideDuelTurnUI();
+      break;
+    }
+    case "duel_ended":
+    case "duel_expired":
+    case "duel_rejected": {
+      activeDuelId = null;
+      isDuelTurn = false;
+      document.getElementById("duel-hud").hidden = true;
+      document.getElementById("duel-challenge-banner").hidden = true;
+      hideDuelTurnUI();
+      break;
+    }
+  }
+}
+
+function renderDuelHud(state) {
+  for (let i = 0; i < 2; i++) {
+    const p = state.players[i];
+    const el = document.getElementById(`duel-fighter-${i + 1}`);
+    const pct = Math.max(0, (p.hp / p.maxHp) * 100).toFixed(1);
+    const barCls = p.hp / p.maxHp > 0.5 ? "" : p.hp / p.maxHp > 0.25 ? "medium" : "low";
+    const isActive = state.currentTurn === p.username;
+    el.innerHTML = `
+      <div class="duel-fighter-name${isActive ? " active-turn" : ""}">
+        ${ra(CLASS_ICONS[p.classKey] || "ra-player")} ${escHtml(p.username)}
+        ${isActive ? ra("ra-dice-six") : ""}
+      </div>
+      <div class="hp-bar-wrap"><div class="hp-bar ${barCls}" style="width:${pct}%"></div></div>
+      <div class="hp-text">${ra("ra-health")} ${p.hp}/${p.maxHp}</div>
+    `;
+  }
+}
+
+function showDuelTurnUI(skills) {
+  document.getElementById("turn-banner").style.display = "flex";
+  document.getElementById("turn-banner").innerHTML = `${ra("ra-crossed-swords")} ¡Tu turno de duelo!`;
+  const row = document.getElementById("skills-row");
+  row.removeAttribute("hidden");
+  row.innerHTML = "";
+
+  const atkBtn = makeSkillBtn("ra-sword", "Atacar", false, () => {
+    ws.send(JSON.stringify({ type: "duel", action: "attack" }));
+    isDuelTurn = false; hideDuelTurnUI();
+  });
+  row.appendChild(atkBtn);
+
+  for (const sk of skills) {
+    const btn = makeSkillBtn(SKILL_ICONS[sk.key] || "ra-sword", sk.name, !sk.available, () => {
+      ws.send(JSON.stringify({ type: "duel", action: "skill", skill: sk.key }));
+      isDuelTurn = false; hideDuelTurnUI();
+    });
+    btn.title = sk.desc;
+    row.appendChild(btn);
+  }
+
+  const defBtn = makeSkillBtn("ra-shield", "Defender", false, () => {
+    ws.send(JSON.stringify({ type: "duel", action: "defend" }));
+    isDuelTurn = false; hideDuelTurnUI();
+  });
+  row.appendChild(defBtn);
+  // no target needed for duels
+}
+
+function hideDuelTurnUI() {
+  if (isDuelTurn) return; // still my turn
+  document.getElementById("turn-banner").style.display = "none";
+  document.getElementById("skills-row").setAttribute("hidden", "");
+}
+
+// ── BIENVENIDA ────────────────────────────────────────────────────────────────
+
+function showWelcome(isGM, hasGM) {
+  if (isGM) {
+    addRawMsg("gm-scenario", `
+      ${ra("ra-crown")}
+      <span>
+        <strong>Eres el Game Master.</strong> Comandos disponibles:<br>
+        <code>/gm scenario &lt;texto&gt;</code> — Establecer escenario<br>
+        <code>/gm event &lt;texto&gt;</code> — Narrar un evento<br>
+        <code>/gm enemy &lt;nombre&gt; &lt;hp&gt; [atk def spd]</code> — Invocar enemigo<br>
+        <code>/gm combat_start</code> / <code>/gm combat_end</code> — Iniciar/terminar combate<br>
+        <code>/gm enemy_attack &lt;enemigo&gt; &lt;jugador&gt;</code> — Atacar en nombre del enemigo<br>
+        <code>/gm loot &lt;nivel&gt; [cantidad] [need_greed|council]</code> — Tirar botín<br>
+        <code>/gm lootmode need_greed|council</code> — Cambiar sistema de loot<br>
+        <code>/gm reward &lt;texto&gt;</code> — Anunciar recompensa
+      </span>
+    `);
+  } else {
+    const noGMWarning = !hasGM
+      ? `<br><br>${ra("ra-warning")} <strong>No hay Game Master activo.</strong> Alguien debe conectarse marcando <em>"Soy el Game Master"</em> en la pantalla de login.`
+      : "";
+    addRawMsg("gm-event", `
+      ${ra("ra-scroll-unfurled")}
+      <span>
+        <strong>Bienvenido a la aventura.</strong> Instrucciones:<br>
+        • Elige una clase para participar en combates<br>
+        • En tu turno aparecerán botones de habilidad y un campo de objetivo<br>
+        • Fuera de combate puedes chatear libremente<br>
+        • <code>/rename &lt;nombre&gt;</code> — Cambiar tu nombre<br>
+        • <code>/prefix &lt;texto&gt;</code> — Poner título antes de tu nombre (ej: Sir, Lady)<br>
+        • <code>/suffix &lt;texto&gt;</code> — Poner título después de tu nombre (ej: el Valiente)<br>
+        • <code>/title clear</code> — Quitar ambos títulos<br>
+        • <code>/vote need|greed|pass</code> — Votar en sorteo de botín<br>
+        • <code>/voteitem &lt;nombre&gt;</code> — Votar en modo Consejo<br>
+        • <code>/duel &lt;nombre&gt;</code> — Retar a un jugador a duelo 1v1<br>
+        • <code>/duel accept</code> / <code>/duel reject</code> — Responder desafío<br>
+        • Al derrotar enemigos y duelos ganarás <strong>XP</strong> y subirás de nivel<br>
+        • Los enemigos pueden soltar botín — revisa el banner verde${noGMWarning}
+      </span>
+    `);
+  }
+}
+</script>
+</body>
+</html>
