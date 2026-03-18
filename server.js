@@ -1767,10 +1767,24 @@ wss.on("connection", (ws) => {
       // If no one is left, full wipe
       const anyConnected = [...wss.clients].some(c => c.readyState === 1 && c.username);
       if (!anyConnected) {
-        resetGameTable();
-        game.players = new Map();
-        game.gm      = null;
-        console.log("Todos se desconectaron — aventura reiniciada");
+        clearTurnReminder();
+        if (game.activeVote) { clearTimeout(game.activeVote.timeout); }
+        for (const [, d] of game.duels) { clearTimeout(d.timeout); clearDuelReminder(d); }
+        game.phase          = "lobby";
+        game.scenario       = null;
+        game.enemies        = [];
+        game.turnOrder      = [];
+        game.turnIndex      = 0;
+        game.lootQueue      = [];
+        game.activeVote     = null;
+        game.lootMode       = "need_greed";
+        game.duels          = new Map();
+        game.shop           = null;
+        game.dialog         = null;
+        game.players        = new Map();
+        game.offlinePlayers = new Map();
+        game.gm             = null;
+        console.log("Todos se desconectaron — mesa limpia");
       } else if (ws !== game.gm) {
         broadcastState();
       }
