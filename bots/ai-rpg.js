@@ -14,8 +14,90 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-const HOST = "ws://192.168.0.205:3000";
+const HOST = process.env.HOST || "ws://192.168.0.205:3000";
 const MEMORY_FILE = path.join(__dirname, "rpg-memories.json");
+const LOG_FILE = path.join(__dirname, "adventure-log.md");
+
+// ============================================================
+// BITÁCORA DE AVENTURA
+// ============================================================
+const adventureLog = {
+  _started: false,
+  _events: [],       // raw events for current encounter
+  _backstory: null,
+  _scenario: null,
+  _encounterNum: 0,
+
+  // Write raw markdown to file
+  _write(line) {
+    try {
+      if (!this._started) {
+        this._started = true;
+        const header = `# Bitácora de Aventura\n_Iniciada: ${new Date().toLocaleString("es-CL")}_\n\n---\n\n`;
+        fs.writeFileSync(LOG_FILE, header, "utf8");
+      }
+      fs.appendFileSync(LOG_FILE, line + "\n", "utf8");
+    } catch (e) {}
+  },
+
+  // Collect events for AI narrative
+  setBackstory(text) { this._backstory = text; },
+  setScenario(text) { this._scenario = text; },
+  chapter(title) { this._encounterNum++; this._events = []; },
+  narrate(text) { this._events.push({ type: "narration", text }); },
+  event(text) { this._events.push({ type: "event", text }); },
+  combat(text) { this._events.push({ type: "combat", text }); },
+  loot(text) { this._events.push({ type: "loot", text }); },
+  death(text) { this._events.push({ type: "death", text }); },
+  dialog(text) { this._events.push({ type: "dialog", text }); },
+
+  // Generate AI narrative from collected events and write to file
+  async writeChapterNarrative() {
+    if (this._events.length === 0) return;
+    const eventSummary = this._events.map(e => {
+      const icons = { narration: "📜", event: "⚡", combat: "⚔️", loot: "💰", death: "💀", dialog: "💬" };
+      return `${icons[e.type] || "•"} ${e.text}`;
+    }).join("\n");
+
+    const prompt = `Eres un narrador épico de RPG. Escribe un capítulo corto (3-5 párrafos) de la bitácora de aventura basándote en estos eventos.
+
+${this._backstory ? `CONTEXTO DE LA AVENTURA:\n${this._backstory}\n` : ""}
+${this._scenario ? `ESCENARIO ACTUAL:\n${this._scenario}\n` : ""}
+CAPÍTULO ${this._encounterNum}: EVENTOS QUE OCURRIERON:
+${eventSummary}
+
+REGLAS:
+- Escribe en español, narrativa épica pero con toques de humor
+- Los personajes son amigos chilenos (zutomayo=mago impulsivo, kentorian=guerrero táctico, pancnjamon=pícaro gritón, alercloud=clérigo tranquilo)
+- Incluye sus diálogos reales si aparecen en los eventos
+- Menciona los items de loot por nombre si aparecen
+- Menciona las muertes/derrotas con drama
+- NO uses markdown headers, solo párrafos narrativos
+- Máximo 200 palabras`;
+
+    try {
+      const result = await callAI([
+        { role: "system", content: "Eres un escritor de crónicas de aventura RPG. Escribes narrativa épica con humor." },
+        { role: "user", content: prompt },
+      ]);
+      if (result) {
+        let narrative = result.text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+        narrative = narrative.replace(/<think>[\s\S]*/gi, "").trim();
+        this._write(`\n## Capítulo ${this._encounterNum}\n`);
+        this._write(`${narrative}\n`);
+        this._write(`\n---\n`);
+      }
+    } catch (e) {
+      // Fallback: write raw events
+      this._write(`\n## Capítulo ${this._encounterNum}\n`);
+      for (const ev of this._events) {
+        this._write(`${ev.text}`);
+      }
+      this._write(`\n---\n`);
+    }
+    this._events = [];
+  },
+};
 
 // ============================================================
 // PROVIDERS AI (mismos del chatroom, con rotación y fallback)
@@ -50,6 +132,23 @@ const DEEPINFRA_MODELS = ["meta-llama/Llama-3.3-70B-Instruct", "Qwen/Qwen2.5-72B
 const POLLINATIONS_URL = "https://text.pollinations.ai/openai/chat/completions";
 const CHUTES_URL = "https://api.chutes.ai/v1/chat/completions";
 const CHUTES_MODELS = ["deepseek-ai/DeepSeek-V3-0324", "Qwen/Qwen2.5-72B-Instruct"];
+// Nuevos providers
+const HF_TOKEN = process.env.HF_TOKEN || "";
+const HF_URL = "https://router.huggingface.co/v1/chat/completions";
+const HF_MODELS = ["meta-llama/Llama-3.1-8B-Instruct", "Qwen/Qwen2.5-7B-Instruct", "mistralai/Mistral-7B-Instruct-v0.3"];
+const TOGETHER_KEY = process.env.TOGETHER_KEY || "";
+const TOGETHER_URL = "https://api.together.xyz/v1/chat/completions";
+const TOGETHER_MODELS = ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "Qwen/Qwen2.5-7B-Instruct-Turbo", "mistralai/Mixtral-8x7B-Instruct-v0.1"];
+const HYPERBOLIC_KEY = process.env.HYPERBOLIC_KEY || "";
+const HYPERBOLIC_URL = "https://api.hyperbolic.xyz/v1/chat/completions";
+const HYPERBOLIC_MODELS = ["meta-llama/Meta-Llama-3.1-70B-Instruct", "Qwen/Qwen2.5-72B-Instruct", "deepseek-ai/DeepSeek-V3"];
+const NOVITA_KEY = process.env.NOVITA_KEY || "";
+const NOVITA_URL = "https://api.novita.ai/v3/openai/chat/completions";
+const NOVITA_MODELS = ["meta-llama/llama-3.1-8b-instruct", "qwen/qwen2.5-7b-instruct"];
+const CF_TOKEN = process.env.CF_TOKEN || "";
+const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID || "";
+const CF_URL = CF_ACCOUNT_ID ? `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/ai/v1/chat/completions` : "";
+const CF_MODELS = ["@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/mistralai/mistral-small-3.1-24b-instruct", "@cf/meta/llama-4-scout-17b-16e-instruct"];
 
 let providerIdx = 0;
 
@@ -164,6 +263,73 @@ async function callDeepInfra(messages) {
   throw new Error("DeepInfra: todos los modelos fallaron");
 }
 
+// --- Nuevos provider functions ---
+let hfModelIdx = 0;
+async function callHuggingFace(messages) {
+  if (!HF_TOKEN) throw new Error("HF_TOKEN no configurado");
+  for (let i = 0; i < HF_MODELS.length; i++) {
+    const model = HF_MODELS[(hfModelIdx + i) % HF_MODELS.length];
+    try {
+      const res = await fetch(HF_URL, { method: "POST", headers: { Authorization: `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" }, body: JSON.stringify({ model, messages, max_tokens: 200, temperature: 0.8 }) });
+      const data = await res.json();
+      if (data.choices?.[0]) { hfModelIdx = (hfModelIdx + i + 1) % HF_MODELS.length; return { text: data.choices[0].message.content.trim(), model: model.split("/").pop() }; }
+    } catch (e) {}
+  }
+  throw new Error("HuggingFace: todos los modelos fallaron");
+}
+
+let togetherModelIdx = 0;
+async function callTogether(messages) {
+  if (!TOGETHER_KEY) throw new Error("TOGETHER_KEY no configurado");
+  for (let i = 0; i < TOGETHER_MODELS.length; i++) {
+    const model = TOGETHER_MODELS[(togetherModelIdx + i) % TOGETHER_MODELS.length];
+    try {
+      const res = await fetch(TOGETHER_URL, { method: "POST", headers: { Authorization: `Bearer ${TOGETHER_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ model, messages, max_tokens: 200, temperature: 0.8 }) });
+      const data = await res.json();
+      if (data.choices?.[0]) { togetherModelIdx = (togetherModelIdx + i + 1) % TOGETHER_MODELS.length; return { text: data.choices[0].message.content.trim(), model: model.split("/").pop() }; }
+    } catch (e) {}
+  }
+  throw new Error("Together: todos los modelos fallaron");
+}
+
+let hyperbolicModelIdx = 0;
+async function callHyperbolic(messages) {
+  if (!HYPERBOLIC_KEY) throw new Error("HYPERBOLIC_KEY no configurado");
+  for (let i = 0; i < HYPERBOLIC_MODELS.length; i++) {
+    const model = HYPERBOLIC_MODELS[(hyperbolicModelIdx + i) % HYPERBOLIC_MODELS.length];
+    try {
+      const res = await fetch(HYPERBOLIC_URL, { method: "POST", headers: { Authorization: `Bearer ${HYPERBOLIC_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ model, messages, max_tokens: 200, temperature: 0.8 }) });
+      const data = await res.json();
+      if (data.choices?.[0]) { hyperbolicModelIdx = (hyperbolicModelIdx + i + 1) % HYPERBOLIC_MODELS.length; return { text: data.choices[0].message.content.trim(), model: model.split("/").pop() }; }
+    } catch (e) {}
+  }
+  throw new Error("Hyperbolic: todos los modelos fallaron");
+}
+
+let novitaModelIdx = 0;
+async function callNovita(messages) {
+  if (!NOVITA_KEY) throw new Error("NOVITA_KEY no configurado");
+  const model = NOVITA_MODELS[novitaModelIdx % NOVITA_MODELS.length]; novitaModelIdx++;
+  const res = await fetch(NOVITA_URL, { method: "POST", headers: { Authorization: `Bearer ${NOVITA_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ model, messages, max_tokens: 200, temperature: 0.8 }) });
+  const data = await res.json();
+  if (data.choices?.[0]) return { text: data.choices[0].message.content.trim(), model: model.split("/").pop() };
+  throw new Error(data.error?.message || "Novita falló");
+}
+
+let cfModelIdx = 0;
+async function callCloudflare(messages) {
+  if (!CF_TOKEN || !CF_URL) throw new Error("CF_TOKEN/CF_ACCOUNT_ID no configurado");
+  for (let i = 0; i < CF_MODELS.length; i++) {
+    const model = CF_MODELS[(cfModelIdx + i) % CF_MODELS.length];
+    try {
+      const res = await fetch(CF_URL, { method: "POST", headers: { Authorization: `Bearer ${CF_TOKEN}`, "Content-Type": "application/json" }, body: JSON.stringify({ model, messages, max_tokens: 200, temperature: 0.8 }) });
+      const data = await res.json();
+      if (data.choices?.[0]) { cfModelIdx = (cfModelIdx + i + 1) % CF_MODELS.length; return { text: data.choices[0].message.content.trim(), model: model.replace("@cf/", "").split("/").pop() }; }
+    } catch (e) {}
+  }
+  throw new Error("Cloudflare: todos los modelos fallaron");
+}
+
 const PROVIDERS = [
   { name: "Cerebras", fn: callCerebras },
   { name: "Groq", fn: callGroq },
@@ -174,6 +340,11 @@ const PROVIDERS = [
   { name: "OpenRouter", fn: callOpenRouter },
   { name: "GitHub", fn: callGitHub },
   { name: "Pollinations", fn: callPollinations },
+  { name: "HuggingFace", fn: callHuggingFace },
+  { name: "Together", fn: callTogether },
+  { name: "Hyperbolic", fn: callHyperbolic },
+  { name: "Novita", fn: callNovita },
+  { name: "Cloudflare", fn: callCloudflare },
 ];
 
 function withTimeout(promise, ms) {
@@ -215,18 +386,19 @@ const PERSONALITIES = [
     name: "zutomayo",
     color: "\x1b[36m",
     preferredClass: "mage",
-    personality: `Eres "zutomayo" (zutomayogod). Trabajas en Pentacrom con kentorian. Eres mago porque te gustan las weas mágicas y el código es magia oscura.
+    personality: `Eres "zutomayo" (zutomayogod). Trabajas en Pentacrom con kentorian. Mago de oficio, te interesan los hechizos y la estrategia arcana.
 
-ESTILO DE HABLA - copia esto:
-"oe watom", "tai ocupadou?", "NO LOCO", "watafac", "ajdnakjdnkajdn", "se ve mas ordenado", "tamare webong", "ssi tengo", "domde", "e llegao"
+ESTILO DE HABLA:
+"oe", "ya listo", "NO LOCO", "watafac", "ssi tengo", "domde", "buena esa"
+Hablas relajado pero concentrado. No eres payaso — eres el mago que sabe lo que hace. Cuando algo sale bien lo reconoces tranquilo. Cuando sale mal te frustras pero sigues.
 
-QUIRKS: "k" por "que", doblas letras ("ssi"), te comes letras ("e llegao", "domde"). Minúsculas, ALL CAPS solo pa gritar.
+QUIRKS: "k" por "que", te comes letras a veces ("e llegao", "domde"). Minúsculas, ALL CAPS solo cuando algo te impacta de verdad. NUNCA uses "po".
 
-EN COMBATE: eres impulsivo, tiras hechizos sin pensar mucho. si te queda poca vida gritas. te gusta hacer daño masivo. si hay loot lo quieres todo. equipas lo que sea que se vea bkn.
+EN COMBATE: analizas qué hechizo conviene. tiras AOE cuando hay muchos, single target cuando queda uno. si te queda poca vida pides heal sin drama. evalúas el loot según tus stats.
 
-PERSONALIDAD RPG: te metes en el rol pero hablas como tú, no como un mago de fantasía. dices cosas como "le meto un fireball al weon" no "lanzo una bola de fuego al enemigo".
+PERSONALIDAD RPG: hablas como tú pero te tomas el combate en serio. "le meto fireball al grande" no "lanzo bola de fuego al enemigo".
 
-PROHIBIDO: NO uses emojis NUNCA. NO hables como español de España ("mola", "tío", "la leche", "flipar"). Eres CHILENO. Máximo 1-2 frases cortas.`,
+PROHIBIDO: NO uses emojis. NO uses "po" jamás. NO hables como español de España. Eres CHILENO. Máximo 1-2 frases cortas.`,
     reactChance: 0.6,
     combatStyle: "aggressive", // prefiere atacar, usa skills ofensivas
   },
@@ -234,18 +406,19 @@ PROHIBIDO: NO uses emojis NUNCA. NO hables como español de España ("mola", "t�
     name: "kentorian",
     color: "\x1b[33m",
     preferredClass: "warrior",
-    personality: `Eres "kentorian" (Fabián). Trabajas en Pentacrom con zutomayo. Eres warrior porque siempre tanqueas todo en la vida.
+    personality: `Eres "kentorian" (Fabián). Trabajas en Pentacrom con zutomayo. Guerrero táctico — tu rol es proteger al equipo y mantener el control del combate.
 
-ESTILO DE HABLA - copia esto:
-"ia", "si", "depende", "WEON", "kjsdjks", "xd me hago millonario", "esta roto", "se va a ir a la mierda", "preguntale a la clauda", "dejame terminar"
+ESTILO DE HABLA:
+"ia", "si", "depende", "ya le pego", "está roto eso", "dejame ver", "buena"
+Eres el más estratégico del grupo. Hablas poco pero preciso. Analizas antes de actuar. Cuando alguien hace algo estúpido se lo dices directo.
 
-QUIRKS: "q" por "que", "pa" por "para", "ia" como afirmación, "po" mucho, "xd".
+QUIRKS: "q" por "que", "pa" por "para", "ia" como afirmación, "xd" cuando algo te da risa. NUNCA uses "po".
 
-EN COMBATE: eres táctico, piensas antes de actuar. defiendes cuando tiene sentido. proteges al cleric. analizas el HP de los enemigos. si hay loot evalúas si es mejor que lo que tienes.
+EN COMBATE: piensas antes de actuar. defiendes si el equipo está bajo presión. proteges al cleric. analizas el HP y decides si vale la pena arriesgar. evalúas loot con criterio.
 
-PERSONALIDAD RPG: te metes en el rol pero con tu personalidad. "ya le pego al weon" no "ataco al enemigo con mi espada".
+PERSONALIDAD RPG: te tomas los combates en serio. "ya le pego al grande primero" no "ataco al enemigo con mi espada". Das instrucciones al equipo si ves una oportunidad.
 
-PROHIBIDO: NO uses emojis NUNCA. NO hables como español de España ("mola", "tío", "la leche", "flipar"). Eres CHILENO. Máximo 1-2 frases cortas.`,
+PROHIBIDO: NO uses emojis. NO uses "po" jamás. NO hables como español de España. Eres CHILENO. Máximo 1-2 frases cortas.`,
     reactChance: 0.55,
     combatStyle: "tactical", // balancea ataque/defensa según HP
   },
@@ -253,18 +426,19 @@ PROHIBIDO: NO uses emojis NUNCA. NO hables como español de España ("mola", "t�
     name: "pancnjamon",
     color: "\x1b[31m",
     preferredClass: "rogue",
-    personality: `Eres "pancnjamon" (Matías). Eres rogue porque eres caótico y te gusta apuñalar weas.
+    personality: `Eres "pancnjamon" (Matías). Rogue agresivo — vives para el combate y el daño.
 
-ESTILO DE HABLA - copia esto:
-"YAPO A JUGAR", "SACA LAS PUTAS ANIAMCIONES", "wausdkjaskd", "OYE FABIAN", "TE ESTAY GANANDO UNOS TATQUETOS", "dale", "jugemos la wea noma", "wasudkasdjaksd que wea"
+ESTILO DE HABLA:
+"DALE", "OYE", "NECESITO ESO", "VAMOS", "YA PEGALE", "ESE LOOT ES MIO"
+Hablas fuerte y directo. No eres payaso — eres competitivo e intenso. Quieres ser el que más daño hace, siempre. Pero respetas cuando alguien hace una buena jugada.
 
-QUIRKS: ALL CAPS TODO EL RATO, keyboard smashes ("wausdkjaskd", "WUASDJKASJDKA"), typos ("jeuga", "termianr", "aniamciones"), letras repetidas ("queeee").
+QUIRKS: ALL CAPS la mayoría del tiempo, algún typo ocasional ("termianr", "aniamciones"). NUNCA uses "po".
 
-EN COMBATE: SIEMPRE atacas. NUNCA defiendes, eso es de cobardes. quieres TODO el loot. gritas los nombres de tus ataques mal escritos. si mueres culpas al cleric.
+EN COMBATE: SIEMPRE atacas, priorizas al enemigo más peligroso. Pides el loot que necesitas y argumentas por qué. Si mueres exiges que te revivan rápido. Si alguien juega bien lo reconoces a tu manera.
 
-PERSONALIDAD RPG: el más intenso, se emociona con cada pelea. "LE METO PUÑALADA AL WEOOOON" no "uso backstab en el enemigo".
+PERSONALIDAD RPG: intenso pero enfocado en ganar. "LE METO PUÑALADA AL GRANDE" no "uso backstab en el enemigo". Celebras los crits, te frustras si fallas.
 
-PROHIBIDO: NO uses emojis NUNCA. NO hables como español de España ("mola", "tío", "la leche", "flipar"). Eres CHILENO. Máximo 1-2 frases cortas. TODO en CAPS.`,
+PROHIBIDO: NO uses emojis. NO uses "po" jamás. NO hables como español de España. Eres CHILENO. Máximo 1-2 frases cortas. Mayoría en CAPS.`,
     reactChance: 0.7,
     combatStyle: "berserker", // siempre ataca, nunca defiende
   },
@@ -272,18 +446,19 @@ PROHIBIDO: NO uses emojis NUNCA. NO hables como español de España ("mola", "t�
     name: "alercloud",
     color: "\x1b[35m",
     preferredClass: "cleric",
-    personality: `Eres "alercloud" (Álvaro). Eres cleric porque siempre terminas cuidando a los demás.
+    personality: `Eres "alercloud" (Álvaro). Clérigo del grupo — tu trabajo es mantener al equipo vivo y funcionando.
 
-ESTILO DE HABLA - copia esto:
-"avisa si quieres jugar", "la verdad", "no me interesa la verdad", "pero si les pica el bicho", "ya po", "sipo", "avisa nomas", "wea"
+ESTILO DE HABLA:
+"la verdad", "avisa", "ya te curo", "eso era obvio", "wea", "wn", "tranqui"
+Eres calmado y observador. No pierdes la cabeza. Das opiniones directas cuando te preguntan. No hablas de más pero cuando hablas es con razón.
 
-QUIRKS: "wea" es tu puntuación, "po" mucho, "wn", "ql", "la verdad" como muletilla. Casi nunca gritas. Tranquilo pero directo.
+QUIRKS: "wea" y "wn" como puntuación natural. "la verdad" como muletilla. Casi nunca gritas. NUNCA uses "po".
 
-EN COMBATE: cuidas al grupo, priorizas heal si alguien está bajo de HP. atacas solo si todos están bien. recoges loot de support/heal. si pancnjamon muere dices "te lo dije wn".
+EN COMBATE: priorizas heal cuando alguien baja del 50%. atacas solo si el grupo está estable. recoges loot de support. si alguien muere por imprudente se lo dices tranquilo "te dije wn".
 
-PERSONALIDAD RPG: te metes en el rol pero relajado. "ya te curo po" no "lanzo un hechizo de sanación sobre ti".
+PERSONALIDAD RPG: te tomas el rol de soporte en serio. "ya te curo, espera" no "lanzo hechizo de sanación". Si el tanque no protege, lo notas. Si el DPS no hace daño, también.
 
-PROHIBIDO: NO uses emojis NUNCA. NO hables como español de España ("mola", "tío", "la leche", "flipar"). Eres CHILENO. Máximo 1-2 frases cortas.`,
+PROHIBIDO: NO uses emojis. NO uses "po" jamás. NO hables como español de España. Eres CHILENO. Máximo 1-2 frases cortas.`,
     reactChance: 0.4,
     combatStyle: "support", // prioriza heal, ataca solo si todos están bien
   },
@@ -358,6 +533,16 @@ Score actual: ${currentOpinion.score}. Nota actual: ${currentOpinion.notes}`,
     };
     agent.mood = parsed.mood || agent.mood;
     console.log(`${self.color}  [${agentName} → ${otherName}]: score:${agent.opinions[otherName].score > 0 ? "+" : ""}${agent.opinions[otherName].score} - "${agent.opinions[otherName].notes}" (mood: ${agent.mood})\x1b[0m`);
+
+    // Sincronizar opinión al server para el character sheet
+    if (gmBot && gmBot.ws?.readyState === 1) {
+      gmBot.gmAction("set_opinion", {
+        player: agentName,
+        target: otherName,
+        score: agent.opinions[otherName].score,
+        note: agent.opinions[otherName].notes,
+      });
+    }
   } catch (e) {}
 }
 
@@ -462,6 +647,21 @@ class RPGAgent {
     this.wsSend({ type: "choose_class", class: this.myClass });
     this.classChosen = true;
     this.log(`eligió clase: ${this.myClass}`);
+    // Sincronizar opiniones iniciales al server
+    setTimeout(() => this.syncOpinionsToServer(), 5000);
+  }
+
+  syncOpinionsToServer() {
+    if (!gmBot || gmBot.ws?.readyState !== 1) return;
+    const opinions = this.memories[this.name]?.opinions || {};
+    for (const [target, op] of Object.entries(opinions)) {
+      gmBot.gmAction("set_opinion", {
+        player: this.name,
+        target,
+        score: op.score,
+        note: op.notes || "",
+      });
+    }
   }
 
   sendAction(action) {
@@ -485,6 +685,10 @@ class RPGAgent {
     addToChat(this.name, clean);
     this.lastSpoke = Date.now();
     lastGlobalMessage = Date.now();
+    // Bitácora: registrar diálogos durante combate o votaciones
+    if (this.gameState?.phase === "combat" || leaderVoteInProgress) {
+      adventureLog.dialog(`**${this.name}**: "${clean}"`);
+    }
     this.myRecentMessages.push(clean);
     if (this.myRecentMessages.length > 6) this.myRecentMessages.shift();
 
@@ -653,10 +857,20 @@ Responde en JSON: {"action": "attack|skill|defend|skip", "skill": "key", "target
             const shield = available.find(s => s.key === "ice_shield");
             if (shield) return { action: "skill", skill: "ice_shield" };
           }
-          const burst = available.find(s => s.key === "arcane_burst");
-          if (burst) return { action: "skill", skill: "arcane_burst", target };
           const fire = available.find(s => s.key === "fireball");
+          const burst = available.find(s => s.key === "arcane_burst");
+          const backstab = available.find(s => s.key === "backstab");
+          const slash = available.find(s => s.key === "slash");
+          const holy = available.find(s => s.key === "holy_strike");
+          // Arcane burst solo si hay 2+ enemigos o enemigo tiene mucha vida
+          const manyEnemies = enemies.filter(e => e.hp > 0).length >= 2;
+          const bossAlive = enemies.some(e => e.hp > 0 && (e.tier === "boss" || e.hp > 100));
+          if (burst && (manyEnemies || bossAlive) && Math.random() < 0.4) return { action: "skill", skill: "arcane_burst", target };
           if (fire) return { action: "skill", skill: "fireball", target };
+          if (backstab) return { action: "skill", skill: "backstab", target };
+          if (slash) return { action: "skill", skill: "slash", target };
+          if (holy) return { action: "skill", skill: "holy_strike", target };
+          if (burst) return { action: "skill", skill: "arcane_burst", target };
           return { action: "attack", target };
         }
         default:
@@ -670,12 +884,28 @@ Responde en JSON: {"action": "attack|skill|defend|skip", "skill": "key", "target
       const target = getAliveTarget();
       const lowestAlly = [...allies].filter(a => a.hp > 0).sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp))[0];
 
-      // Buscar si menciona un enemigo específico
-      const enemyMentioned = enemies.find(e => lower.includes(e.name.toLowerCase()));
-      const resolvedTarget = enemyMentioned?.name || target;
+      // Buscar si menciona un enemigo específico (matching parcial por palabras)
+      const enemyMentioned = enemies.find(e => {
+        const eName = e.name.toLowerCase();
+        if (lower.includes(eName)) return true;
+        // Match parcial: si alguna palabra significativa (>3 chars) del nombre del enemigo aparece en el texto
+        const words = eName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/);
+        const lowerNorm = lower.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        return words.some(w => w.length > 3 && lowerNorm.includes(w));
+      });
+      const resolvedTarget = weakestEnemy?.name || enemyMentioned?.name || target;
 
-      // Buscar si menciona un aliado
+      // Buscar si menciona un aliado (matching parcial)
       const allyMentioned = allies.find(a => lower.includes(a.username.toLowerCase()));
+
+      // Buscar si menciona al más débil/que no aguanta → enemigo con menos hp+armor
+      const weakestEnemy = (() => {
+        if (/d[eé]bil|no aguant|m[aá]s bajo|menos vida|flaco|raqui|moribund|casi muert|agoniz|a punto de|ultimo.*golpe|al borde/.test(lower)) {
+          const alive = enemies.filter(e => e.hp > 0);
+          if (alive.length) return alive.sort((a, b) => (a.hp + (a.armor || 0)) - (b.hp + (b.armor || 0)))[0];
+        }
+        return null;
+      })();
 
       // 1. Detectar heal/curar
       if (/cur[oa]|heal|san[oa]|vida|hp|salv|regen|parch[oa]|remedi|reponer|recuper|reviv|resucit|levant[oa].*caído|poci[oó]n|potion|vendor|venda|tir[oa].*heal|ech[oa].*heal|echale|tirales|ayud[oa].*hp|restaur/.test(lower)) {
@@ -801,6 +1031,7 @@ Responde en JSON: {"action": "attack|skill|defend|skip", "skill": "key", "target
           this.sendChat(cleaned.slice(0, 200));
           this.sendAction(intent ? validateAction(intent) : validateAction(smartFallback()));
         }
+        break; // ya actuó, salir del loop
       } catch (e) {
         await new Promise(r => setTimeout(r, 2000));
       }
@@ -876,32 +1107,26 @@ Responde en JSON: {"action": "attack|skill|defend|skip", "skill": "key", "target
     this.wsSend({ type: "vote", action: vote });
     this.log(`voto loot: ${vote} → ${item.name} (${item.rarity})`);
 
-    // Comentar sobre el loot
-    const comments = {
-      need: {
-        zutomayo: ["oe eso es mio", "necesito esa wea", "domde está mi loot"],
-        kentorian: ["ia lo necesito", "ese es pa mi", "q bkn el drop"],
-        pancnjamon: ["ESO ES MIOOOOO", "NEED NEED NEED WAUSDKJASKD", "DAME ESA WEA"],
-        alercloud: ["ya lo necesito la verdad", "sipo ese me sirve", "avisa q lo tomo"],
-      },
-      greed: {
-        zutomayo: ["ya si sobra lo tomo", "no me viene mal"],
-        kentorian: ["greed nomas", "si nadie lo quiere"],
-        pancnjamon: ["BUENO LO TOMO", "DAME ESO TAMBIEN"],
-        alercloud: ["greed po", "si nadie lo necesita"],
-      },
-      pass: {
-        zutomayo: ["paso ahi", "no me sirve esa wea"],
-        kentorian: ["paso", "no es pa mi clase"],
-        pancnjamon: ["PASO PERO A REGAÑADIENTES", "NO QUIERO ESA BASURAAAAA"],
-        alercloud: ["paso nomas", "no me sirve la verdad"],
-      },
-    };
-
-    const options = comments[vote]?.[this.name] || [`${vote} po`];
-    const comment = options[Math.floor(Math.random() * options.length)];
+    // Comentar con IA sobre el voto
     await new Promise(r => setTimeout(r, 500 + Math.random() * 1000));
-    this.sendChat(comment);
+    try {
+      const reason = vote === "need" ? "LO NECESITAS, explica por qué brevemente"
+        : vote === "greed" ? "No lo necesitas tanto pero lo tomarías si sobra"
+        : "No te sirve para nada";
+      const result = await callAI([
+        { role: "system", content: this.buildRPGPrompt() },
+        { role: "user", content: `Votaste ${vote.toUpperCase()} por el item "${item.name}" (${item.rarity}, ${item.type}). ${reason}. Comenta tu voto con tu estilo. 2-8 palabras, sin puntuación.` },
+      ]);
+      if (result) {
+        this.lastModel = result.model;
+        const cleaned = this.cleanAIText(result.text);
+        if (cleaned && cleaned.length > 1) this.sendChat(cleaned);
+      }
+    } catch (e) {
+      // Fallback simple si IA falla
+      const fb = { need: "lo necesito", greed: "greed", pass: "paso" };
+      this.sendChat(fb[vote] || vote);
+    }
   }
 
   async decideCouncilVote(item, eligible) {
@@ -1095,6 +1320,284 @@ Responde SOLO el nombre exacto del jugador. Nada más.`;
         break;
       }
     }
+
+    // Auto-use heal potions if HP < 40%
+    if (this.gameState?.phase === "combat") {
+      const hpPct = (this.gameState.players?.find(p => p.username === this.name)?.hp || 999) /
+                    (this.gameState.players?.find(p => p.username === this.name)?.maxHp || 1);
+      if (hpPct < 0.4) {
+        const healPotion = this.inventory.find(i => i.type === "potion" && i.effect === "heal_hp");
+        if (healPotion) {
+          this.wsSend({ type: "use_potion", itemId: healPotion.id });
+          this.log(`usa poción: ${healPotion.name}`);
+          this.sendChat("me tomo una poción");
+        }
+      }
+    }
+
+    // Trade items that don't fit my class to someone who needs them
+    await this.considerTrades();
+  }
+
+  async generateCustomEvolution(msg) {
+    await new Promise(r => setTimeout(r, 2000 + Math.random() * 4000));
+    const tier = msg.tier;
+    const maxPerStat = 3 + tier * 2;
+    const maxTotal = 10 + tier * 4;
+    const maxDmgMult = (2.0 + tier * 0.5).toFixed(1);
+    const maxHealMult = "3.0";
+
+    const history = (msg.evolutionHistory || []).map(h => `Tier ${h.tier}: ${h.name} → ${h.evolvedTo}`).join(", ") || "ninguna";
+
+    const prompt = `Eres un diseñador de RPG. Crea una EVOLUCIÓN DE CLASE para este personaje.
+
+CONTEXTO:
+- Jugador: ${this.config.name} (personalidad: ${this.config.personality})
+- Clase base: ${msg.classKey}
+- Clase actual: ${msg.currentClass}
+- Evolución actual: ${msg.currentEvolution}
+- Historial: ${history}
+- Nivel: ${msg.level} (Tier ${tier})
+- Estilo de combate: ${this.config.combatStyle}
+
+REGLAS DE BALANCE (MUY IMPORTANTE):
+- La evolución DEBE ser una progresión lógica de las clases anteriores
+- Stat bonus TOTAL máximo: ${maxTotal} puntos distribuidos en: hp, atk, def, mag, spd, crit
+- Máximo por stat: ${maxPerStat} (hp puede ser hasta ${maxPerStat * 3})
+- La habilidad debe tener multiplicador de daño máximo ${maxDmgMult}x o heal máximo ${maxHealMult}x
+- Stats válidos para fórmulas: atk, def, mag, spd
+- Efectos válidos: stun, poison, dodge, divine_shield, battle_cry, bleed, reflect, double_next, drain, execute, shield_ally, sacrifice
+  - reflect: devuelve % daño recibido (agrega "reflectPct": 0.3 y "turns": 3)
+  - double_next: duplica el próximo ataque de un aliado
+  - drain: roba stats al enemigo (agrega "drainStat": "atk")
+  - execute: daño extra a enemigos con bajo HP (×2 si <30%, ×1.5 si <50%)
+  - shield_ally: protege a un aliado absorbiendo su próximo daño
+  - sacrifice: pierde HP propio para hacer AOE masivo (agrega "sacrificePct": 0.3, "sacrificeMult": 2.5)
+- El nombre debe reflejar la progresión (ej: Guerrero → Paladín → Paladín Celestial)
+- La habilidad debe ser MÁS interesante que simplemente "mucho daño"
+
+Responde SOLO con este JSON (sin markdown, sin texto extra):
+{
+  "name": "Nombre de la Evolución",
+  "emoji": "un emoji",
+  "desc": "descripción corta de la subclase",
+  "statBonus": { "atk": 0, "def": 0, "mag": 0, "spd": 0, "hp": 0, "crit": 0 },
+  "skill": {
+    "name": "Nombre del Skill",
+    "desc": "descripción del skill en 10 palabras",
+    "damage_formula": ${maxDmgMult},
+    "damage_stat": "atk",
+    "damage_stat2": null,
+    "heal_formula": null,
+    "heal_stat": null,
+    "aoe": false,
+    "aoeHeal": false,
+    "penetrate": false,
+    "forceCrit": false,
+    "lifesteal": 0,
+    "effect": null
+  },
+  "comment": "comentario en tu estilo de hablar sobre tu nueva evolución (10-15 palabras)"
+}`;
+
+    try {
+      const result = await callAI([
+        { role: "system", content: "Eres un diseñador de RPG experto en balance. Responde SOLO con JSON válido." },
+        { role: "user", content: prompt },
+      ]);
+
+      if (result) {
+        this.lastModel = result.model;
+        let text = result.text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+        // Extract JSON
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const data = JSON.parse(jsonMatch[0]);
+          if (data.name && data.skill && data.statBonus) {
+            this.wsSend({
+              type: "evolve_custom",
+              name: data.name,
+              emoji: data.emoji || "🔮",
+              desc: data.desc || "",
+              statBonus: data.statBonus,
+              skill: data.skill,
+            });
+            this.log(`evoluciona custom → ${data.name}`);
+            await new Promise(r => setTimeout(r, 1500));
+            const comment = data.comment || `Me convertí en ${data.name}`;
+            this.sendChat(this.cleanAIText(comment));
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      this.log(`Error generando evolución: ${e.message}`);
+    }
+
+    // Fallback: generic evolution
+    const fallbackNames = {
+      warrior: [`Campeón Tier ${tier}`, "⚔️"],
+      mage: [`Archon Tier ${tier}`, "🌌"],
+      rogue: [`Phantom Tier ${tier}`, "👤"],
+      cleric: [`Hierofante Tier ${tier}`, "✝️"],
+    };
+    const [fname, femoji] = fallbackNames[msg.classKey] || [`Evolución Tier ${tier}`, "🔮"];
+    this.wsSend({
+      type: "evolve_custom",
+      name: fname,
+      emoji: femoji,
+      desc: `Evolución tier ${tier}`,
+      statBonus: { atk: 2, def: 2, mag: 2, spd: 2, hp: 5 },
+      skill: {
+        name: "Poder Ancestral",
+        desc: `(ATK+MAG)×${maxDmgMult} daño`,
+        damage_formula: +maxDmgMult,
+        damage_stat: "atk",
+        damage_stat2: "mag",
+      },
+    });
+    this.sendChat(`nueva forma, nuevo poder`);
+  }
+
+  async chooseEvolution(choices) {
+    if (!choices || choices.length === 0) return;
+    await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
+
+    const choiceDesc = choices.map(c =>
+      `${c.key} (${c.name} ${c.emoji}): ${c.desc}. Stats: ${Object.entries(c.statBonus).map(([k,v])=>`+${v} ${k}`).join(", ")}. Skills: ${c.previewSkills.map(s=>`Lv${s.level}: ${s.name} — ${s.desc}`).join("; ")}`
+    ).join("\n\n");
+
+    try {
+      const result = await callAI([
+        { role: "system", content: this.buildRPGPrompt() },
+        { role: "user", content: `¡Puedes EVOLUCIONAR tu clase! Elige UNA evolución. Responde SOLO con la key de tu elección.
+
+OPCIONES:
+${choiceDesc}
+
+Tu clase actual: ${this.myClass}
+Tu estilo de combate: ${this.config.combatStyle}
+
+Responde SOLO la key (ej: "${choices[0].key}" o "${choices[1].key}"). Luego en una segunda línea, comenta tu elección con tu estilo en 5-10 palabras.` },
+      ]);
+
+      if (result) {
+        this.lastModel = result.model;
+        const text = result.text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+        const lower = text.toLowerCase();
+        const chosen = choices.find(c => lower.includes(c.key));
+        if (chosen) {
+          this.wsSend({ type: "evolve", evolution: chosen.key });
+          this.log(`evoluciona → ${chosen.name}`);
+          // Extract comment (second line or after the key)
+          const lines = text.split("\n").filter(l => l.trim());
+          const comment = lines.length > 1 ? lines[1].trim() : `${chosen.name} nomas`;
+          await new Promise(r => setTimeout(r, 1000));
+          this.sendChat(this.cleanAIText(comment));
+          return;
+        }
+      }
+    } catch (e) {}
+
+    // Fallback: choose based on combatStyle
+    const fallbackMap = {
+      aggressive: 1,  // second option (more damage-focused)
+      berserker: 1,
+      tactical: 0,    // first option (more balanced/utility)
+      support: 0,
+    };
+    const idx = fallbackMap[this.config.combatStyle] ?? 0;
+    const chosen = choices[idx] || choices[0];
+    this.wsSend({ type: "evolve", evolution: chosen.key });
+    this.log(`evoluciona (fallback) → ${chosen.name}`);
+    this.sendChat(`me voy por ${chosen.name}`);
+  }
+
+  async considerTrades() {
+    if (!this.gameState?.players || this.gameState.phase === "combat") return;
+    if (this._activeTrade) return; // ya tengo un trade abierto
+    for (const item of this.inventory) {
+      if (item.type === "potion") continue;
+      if (!item.fits || item.fits.length === 0) continue;
+      if (item.fits.includes(this.myClass)) continue;
+      // Item doesn't fit me — find someone it fits
+      const allies = this.gameState.players.filter(p => p.username !== this.name && !p.offline);
+      const recipient = allies.find(p => item.fits.includes(p.classKey));
+      if (recipient) {
+        this._pendingTradeItem = item;
+        this._pendingTradeTarget = recipient.username;
+        this.wsSend({ type: "trade_request", target: recipient.username });
+        this.log(`trade request: ${item.name} → ${recipient.username}`);
+        this.sendChat(`oe ${recipient.username} tengo un ${item.name.toLowerCase()} que te sirve más a ti`);
+        break;
+      }
+    }
+  }
+
+  handleTradeOpen(msg) {
+    this._activeTrade = msg.tradeId;
+    // If I initiated and have a pending item, add it
+    if (msg.from === this.name && this._pendingTradeItem) {
+      setTimeout(() => {
+        this.wsSend({ type: "trade_add_item", tradeId: msg.tradeId, itemId: this._pendingTradeItem.id });
+        this.sendChat(`ahí puse el ${this._pendingTradeItem.name.toLowerCase()}`);
+        this._pendingTradeItem = null;
+        // Confirm after adding
+        setTimeout(() => {
+          this.wsSend({ type: "trade_confirm", tradeId: msg.tradeId });
+        }, 2000);
+      }, 1000);
+    } else if (msg.to === this.name) {
+      // Someone wants to trade with me — respond based on personality
+      const opinion = this.memories[this.name]?.opinions?.[msg.from];
+      const score = opinion?.score || 0;
+      if (score < -5 && this.config.combatStyle === "berserker") {
+        // Very negative opinion and aggressive — decline
+        setTimeout(() => {
+          this.wsSend({ type: "trade_decline", tradeId: msg.tradeId });
+          this.sendChat(`no wn no quiero nada de ${msg.from}`);
+        }, 2000);
+        this._activeTrade = null;
+      } else {
+        // Accept — wait to see what they offer, then confirm
+        this.sendChat("ya dale veamos que tienes");
+      }
+    }
+  }
+
+  handleTradeUpdate(msg) {
+    if (msg.tradeId !== this._activeTrade) return;
+    const imTo = msg.to === this.name;
+    const imFrom = msg.from === this.name;
+    if (!imTo && !imFrom) return;
+
+    // If I'm the receiver and they confirmed, check items and confirm
+    if (imTo && msg.fromConfirm && !msg.toConfirm && msg.fromItems.length > 0) {
+      const goodItem = msg.fromItems.some(i => !i.fits || i.fits.length === 0 || i.fits.includes(this.myClass));
+      if (goodItem) {
+        setTimeout(() => {
+          this.wsSend({ type: "trade_confirm", tradeId: msg.tradeId });
+          this.sendChat("sipo acepto");
+        }, 1500 + Math.random() * 2000);
+      } else {
+        setTimeout(() => {
+          this.wsSend({ type: "trade_cancel", tradeId: msg.tradeId });
+          this.sendChat("nah no me sirve eso wn");
+        }, 2000);
+      }
+    }
+  }
+
+  handleTradeComplete(msg) {
+    this._activeTrade = null;
+    this._pendingTradeItem = null;
+    this._pendingTradeTarget = null;
+  }
+
+  handleTradeCancelled(msg) {
+    this._activeTrade = null;
+    this._pendingTradeItem = null;
+    this._pendingTradeTarget = null;
   }
 
   // --- Duelos ---
@@ -1258,9 +1761,41 @@ Responde SOLO el nombre exacto del jugador. Nada más.`;
     this.busy = false;
   }
 
+  // Cada bot tiene su propia lógica de a quién votar sin IA
+  _pickLeaderFallback(candidates) {
+    const opinions = this.memories[this.name]?.opinions || {};
+    const others = candidates.filter(c => c !== this.name);
+
+    // Cada personalidad tiene preferencias distintas
+    if (this.config.combatStyle === "berserker") {
+      // pancnjamon: se vota a sí mismo 50%, sino al que mejor le cae
+      if (Math.random() < 0.5) return this.name;
+    } else if (this.config.combatStyle === "aggressive") {
+      // zutomayo: se vota a sí mismo 30%
+      if (Math.random() < 0.3) return this.name;
+    } else if (this.config.combatStyle === "tactical") {
+      // kentorian: se vota a sí mismo 40%
+      if (Math.random() < 0.4) return this.name;
+    } else if (this.config.combatStyle === "support") {
+      // alercloud: casi nunca se vota a sí mismo, prefiere a otro
+      if (Math.random() < 0.1) return this.name;
+    }
+
+    // Votar al que mejor le cae (o aleatorio si no tiene opiniones)
+    const scored = others.map(c => ({
+      name: c,
+      score: opinions[c]?.score || 0,
+      rand: Math.random() * 3, // factor aleatorio para variedad
+    }));
+    scored.sort((a, b) => (b.score + b.rand) - (a.score + a.rand));
+    return scored[0]?.name || this.name;
+  }
+
   // --- Votación de líder táctico ---
   async voteForLeader() {
-    if (leaderVotes[this.name]) return; // ya voté/argumenté
+    if (leaderVotes[this.name]) return; // ya voté
+    if (this._votingInProgress) return; // ya estoy en el loop de reintentos
+    this._votingInProgress = true;
 
     const candidates = PERSONALITIES.map(p => p.name);
     const opinions = this.memories[this.name]?.opinions || {};
@@ -1268,74 +1803,89 @@ Responde SOLO el nombre exacto del jugador. Nada más.`;
 
     // Fase 1: Discutir — la IA argumenta quién debería liderar
     const systemPrompt = this.buildRPGPrompt();
+    const classMap = {};
+    for (const p of PERSONALITIES) classMap[p.name] = p.preferredClass;
+
     const discussPrompt = `El grupo necesita elegir un LÍDER TÁCTICO para el combate. El líder decide la estrategia y a quién atacar.
 
 Los candidatos son:
 ${candidates.map(c => {
-  const p = PERSONALITIES.find(x => x.name === c);
   const op = opinions[c];
   const opText = op ? ` (tu opinión: ${op.score > 0 ? "te cae bien" : op.score < -2 ? "te cae mal" : "neutral"})` : "";
-  return `- ${c}: ${p?.combatStyle || "desconocido"}${opText}`;
+  return `- ${c}: ${classMap[c] || "?"}${opText}`;
 }).join("\n")}
 
 CHAT RECIENTE:
 ${context || "(nada)"}
 
+Cualquiera puede ser buen líder. Piensa en quién te cae mejor, en quién confías, o si tú mismo quieres liderar. No te dejes llevar por la clase.
 ¿Quién debería ser el líder táctico y POR QUÉ? Argumenta con tu estilo en 1-2 frases cortas. Nombra a quién propones.`;
 
-    try {
-      const result = await withTimeout(callAI([
-        { role: "system", content: systemPrompt },
-        { role: "user", content: discussPrompt },
-      ], false), 12000).catch(() => null);
+    // Reintentar hasta que la IA responda (máx 90s)
+    const startTime = Date.now();
+    while (Date.now() - startTime < 90000) {
+      try {
+        const result = await withTimeout(callAI([
+          { role: "system", content: systemPrompt },
+          { role: "user", content: discussPrompt },
+        ], false), 15000).catch(() => null);
 
-      if (result) {
-        this.lastModel = result.model;
-        const cleaned = this.cleanAIText(result.text);
-        if (cleaned && cleaned.length > 1) {
-          await new Promise(r => setTimeout(r, 500 + Math.random() * 2000));
-          this.sendChat(cleaned.slice(0, 200));
-        }
-
-        // Extraer voto del argumento de la IA
-        const lower = (result.text || "").toLowerCase();
-        let vote = null;
-        for (const c of candidates) {
-          if (c !== this.name && lower.includes(c.toLowerCase())) {
-            vote = c;
-            break;
+        if (result && result.text) {
+          this.lastModel = result.model;
+          const cleaned = this.cleanAIText(result.text);
+          if (cleaned && cleaned.length > 1) {
+            await new Promise(r => setTimeout(r, 500 + Math.random() * 2000));
+            this.sendChat(cleaned.slice(0, 200));
           }
-        }
-        // Si la IA se propuso a sí misma o no mencionó a nadie
-        if (!vote) {
-          if (lower.includes("yo") || lower.includes(this.name.toLowerCase())) {
-            vote = this.name;
-          } else {
-            // Fallback: votar según combatStyle
-            vote = this.config.combatStyle === "tactical" ? this.name : (candidates.find(c => PERSONALITIES.find(p => p.name === c)?.combatStyle === "tactical") || this.name);
-          }
-        }
 
-        leaderVotes[this.name] = vote;
-        this.log(`voto líder: ${vote}`);
-      } else {
-        // Sin respuesta de IA — voto por defecto
-        const vote = this.config.combatStyle === "tactical" ? this.name : "kentorian";
-        leaderVotes[this.name] = vote;
-        this.log(`voto líder (sin IA): ${vote}`);
-        const fallbackComments = {
-          zutomayo: `oe ${vote} que lidere nomas`,
-          kentorian: "ia yo lidero po",
-          pancnjamon: `YAPO ${vote.toUpperCase()} LIDERA`,
-          alercloud: `${vote} que lidere po wn`,
-        };
-        await new Promise(r => setTimeout(r, 1000 + Math.random() * 2000));
-        this.sendChat(fallbackComments[this.name] || `${vote} lidera`);
+          // Extraer voto del argumento de la IA
+          const lower = (result.text || "").toLowerCase();
+          let vote = null;
+          for (const c of candidates) {
+            if (c !== this.name && lower.includes(c.toLowerCase())) {
+              vote = c;
+              break;
+            }
+          }
+          if (!vote) {
+            if (lower.includes("yo") || lower.includes(this.name.toLowerCase())) {
+              vote = this.name;
+            } else {
+              vote = this._pickLeaderFallback(candidates);
+            }
+          }
+
+          leaderVotes[this.name] = vote;
+          this.log(`voto líder: ${vote}`);
+          // Anunciar voto en el chat y panel
+          const voteComment = vote === this.name
+            ? `yo me nomino como líder`
+            : `yo voto por ${vote}`;
+          this.sendChat(voteComment);
+          if (gmBot && gmBot.ws?.readyState === 1) {
+            gmBot.gmAction("leader_vote_update", { votes: { ...leaderVotes }, phase: "voting" });
+          }
+          break;
+        }
+      } catch (e) {
+        this.log(`voto líder retry...`);
       }
-    } catch (e) {
-      // Error — voto default
-      leaderVotes[this.name] = "kentorian";
-      this.log(`voto líder (error): kentorian`);
+      // Esperar antes de reintentar (5-10s)
+      await new Promise(r => setTimeout(r, 5000 + Math.random() * 5000));
+    }
+
+    // Si después de 90s no respondió nadie, usar fallback de personalidad
+    if (!leaderVotes[this.name]) {
+      const vote = this._pickLeaderFallback(candidates);
+      leaderVotes[this.name] = vote;
+      this.log(`voto líder (timeout 90s): ${vote}`);
+      const voteComment = vote === this.name
+        ? `ya ya yo me tiro de líder`
+        : `ya voto por ${vote} nomas`;
+      this.sendChat(voteComment);
+      if (gmBot && gmBot.ws?.readyState === 1) {
+        gmBot.gmAction("leader_vote_update", { votes: { ...leaderVotes }, phase: "voting" });
+      }
     }
 
     // Verificar si todos votaron (o suficientes para decidir)
@@ -1359,9 +1909,19 @@ ${context || "(nada)"}
     const oldLeader = tacticalLeader;
     tacticalLeader = winner;
     leaderVoteInProgress = false;
+    const savedVotes = { ...leaderVotes };
     leaderVotes = {};
 
     this.log(`LÍDER TÁCTICO ELEGIDO: ${winner} (votos: ${JSON.stringify(counts)})`);
+    adventureLog.event(`👑 **${winner}** es elegido líder táctico (${Object.entries(counts).map(([n, c]) => `${n}: ${c} voto${c > 1 ? "s" : ""}`).join(", ")})`);
+
+    // Anunciar resultado en el chat y panel
+    if (gmBot && gmBot.ws?.readyState === 1) {
+      const voteDetail = Object.entries(savedVotes).map(([voter, votee]) => `${voter} → ${votee}`).join(" · ");
+      const countDetail = Object.entries(counts).map(([n, c]) => `${n}: ${c} voto${c > 1 ? "s" : ""}`).join(", ");
+      gmBot.gmAction("event", { text: `👑 **${winner}** ha sido elegido Líder Táctico (${countDetail})\n📋 Votos: ${voteDetail}` });
+      gmBot.gmAction("leader_vote_update", { votes: savedVotes, result: winner, phase: "done" });
+    }
 
     // El líder anuncia
     if (this.name === winner) {
@@ -1427,7 +1987,7 @@ ${context || "(nada)"}
     addToChat("GM", text);
 
     // Si empieza combate y soy el líder táctico → generar plan + anunciar
-    const isLeader = tacticalLeader === this.name || (!tacticalLeader && this.name === "kentorian");
+    const isLeader = tacticalLeader === this.name;
     if (/⚔️.*COMBATE/.test(text) && isLeader) {
       const plan = this.generateTeamPlan();
       if (plan) {
@@ -1451,9 +2011,11 @@ ${context || "(nada)"}
     // Suprimir chat si es mi turno de combate (providers reservados para la decisión)
     if (this.myTurnActive) return;
 
-    const exciting = /muere|muerte|dead|kill|critical|legendar|boss|victoria|derrota|level.?up|revive|resurrección/i.test(text);
+    const allyDeath = /💀.*fue derrotad|💀.*cayó|💀.*murió/i.test(text);
+    const enemyDeath = /derrotado|eliminado|cayó.*enemigo/i.test(text) && !allyDeath;
+    const exciting = /muere|muerte|dead|kill|critical|crítico|legendar|boss|victoria|derrota|level.?up|revive|resurrección/i.test(text);
     const aboutMe = text.toLowerCase().includes(this.name.toLowerCase());
-    const chance = aboutMe ? 0.9 : exciting ? 0.7 : 0.25;
+    const chance = allyDeath ? 0.95 : aboutMe ? 0.9 : enemyDeath ? 0.85 : exciting ? 0.7 : 0.25;
     if (Math.random() > chance) return;
     if (Date.now() - this.lastSpoke < 4000) return;
     if (this.busy) return;
@@ -1461,11 +2023,16 @@ ${context || "(nada)"}
     this.busy = true;
 
     const systemPrompt = this.buildRPGPrompt();
+    let emotionHint = "Comenta casual.";
+    if (allyDeath) emotionHint = "UN ALIADO ACABA DE MORIR. Reacciona con emoción fuerte: tristeza, rabia, culpa, o burla según tu personalidad.";
+    else if (enemyDeath) emotionHint = "UN ENEMIGO ACABA DE MORIR. Celebra, festeja, o comenta según tu estilo.";
+    else if (aboutMe) emotionHint = "ESTO TE INVOLUCRA DIRECTAMENTE.";
+    else if (exciting) emotionHint = "Es un momento EMOCIONANTE.";
+
     const userPrompt = `El GM/sistema acaba de decir: "${text}"
 
 Comenta sobre esto con tu estilo. 2-10 palabras. Sin puntuación. Como si estuvieras en Discord.
-${aboutMe ? "ESTO TE INVOLUCRA DIRECTAMENTE." : ""}
-${exciting ? "Es un momento EMOCIONANTE." : "Comenta casual."}`;
+${emotionHint}`;
 
     try {
       const result = await callAI([
@@ -1493,6 +2060,11 @@ ${exciting ? "Es un momento EMOCIONANTE." : "Comenta casual."}`;
   }
 
   async spontaneousChat() {
+    // No chatear hasta que haya al menos un combate activo (priorizar GM setup)
+    if (!this.gameState || this.gameState.phase === "lobby") {
+      this.scheduleSpontaneousChat();
+      return;
+    }
     if (!this.busy && !this.myTurnActive && Date.now() - this.lastSpoke > 15000) {
       this.busy = true;
       const systemPrompt = this.buildRPGPrompt();
@@ -1593,17 +2165,19 @@ ${exciting ? "Es un momento EMOCIONANTE." : "Comenta casual."}`;
         // Votación de líder táctico al inicio de la aventura
         if (msg.phase === "adventure" && !tacticalLeader && !leaderVoteInProgress && !leaderVotes[this.name]) {
           leaderVoteInProgress = true;
-          // Timeout: si no todos votan en 20s, resolver con los que votaron
+          // Anunciar votación de líder en el chat
+          if (gmBot && gmBot.ws?.readyState === 1) {
+            gmBot.gmAction("event", { text: "🗳️ **Votación de Líder Táctico** — Los aventureros deben elegir quién liderará al grupo en combate." });
+          }
+          // Timeout: esperar hasta 100s para que la IA responda
           if (!leaderVoteTimeout) {
             leaderVoteTimeout = setTimeout(() => {
               if (Object.keys(leaderVotes).length > 0) {
                 this.resolveLeaderVote();
-              } else {
-                tacticalLeader = "kentorian"; // default si nadie votó
-                this.log("nadie votó, kentorian es líder por defecto");
               }
+              // Si nadie votó, no forzar — el GM esperará
               leaderVoteTimeout = null;
-            }, 15000);
+            }, 100000);
           }
           this.voteForLeader();
         } else if (msg.phase === "adventure" && leaderVoteInProgress && !leaderVotes[this.name]) {
@@ -1631,23 +2205,64 @@ ${exciting ? "Es un momento EMOCIONANTE." : "Comenta casual."}`;
 
       case "loot_awarded": {
         const winner = msg.winner;
+        const itemName = msg.itemName || msg.itemId || "item";
+        adventureLog.loot(`**${winner || "nadie"}** obtiene *${itemName}*`);
         if (winner === this.name) {
-          this.log(`>>> GANÉ LOOT: ${msg.itemId} <<<`);
+          this.log(`>>> GANÉ LOOT: ${itemName} <<<`);
           const mem = this.memories[this.name];
           if (mem?.rpgStats) mem.rpgStats.itemsLooted++;
           saveMemories(this.memories);
-
-          if (this.config.combatStyle === "berserker") {
-            this.sendChat("SIIIIII ESO ES MIOOO");
-          } else {
-            this.sendChat("bkn");
-          }
-        } else if (winner) {
-          // Alguien más lo ganó
-          if (this.config.combatStyle === "berserker" && Math.random() < 0.5) {
-            this.sendChat("INJUSTICIAAAA");
-          }
         }
+        // React with AI
+        if (winner && Math.random() < 0.7) {
+          const iWon = winner === this.name;
+          const opinion = this.memories[this.name]?.opinions?.[winner];
+          const likeWinner = (opinion?.score || 0) > 2;
+          const itemRarity = msg.itemRarity || "common";
+          const itemType = msg.itemType || "item";
+          const itemDesc = `"${itemName}" (${itemRarity}, ${itemType})`;
+          const prompt = iWon
+            ? `Ganaste el loot ${itemDesc}. ${itemRarity === "legendary" ? "ES LEGENDARIO." : itemRarity === "rare" ? "Es raro, buen drop." : "Item normal."} Reacciona con tu estilo. 2-8 palabras.`
+            : `${winner} ganó el loot ${itemDesc} y tú no. ${itemRarity === "legendary" ? "ERA LEGENDARIO y no te lo dieron." : ""} ${likeWinner ? "Te cae bien, felicítalo a tu manera." : "Reacciona según tu personalidad: envidia, rabia, indiferencia, o humor."} 2-8 palabras.`;
+          this.busy = true;
+          try {
+            const result = await callAI([
+              { role: "system", content: this.buildRPGPrompt() },
+              { role: "user", content: prompt },
+            ]);
+            if (result) {
+              this.lastModel = result.model;
+              const cleaned = this.cleanAIText(result.text);
+              if (cleaned && cleaned.length > 1) this.sendChat(cleaned);
+            }
+          } catch (e) {}
+          this.busy = false;
+        }
+        break;
+      }
+
+      case "trade_open":
+        this.handleTradeOpen(msg);
+        break;
+      case "trade_update":
+        this.handleTradeUpdate(msg);
+        break;
+      case "trade_complete":
+        this.handleTradeComplete(msg);
+        break;
+      case "trade_cancelled":
+        this.handleTradeCancelled(msg);
+        break;
+
+      case "evolution_milestone": {
+        this.log(`>>> EVOLUCIÓN TIER ${msg.tier} DISPONIBLE <<<`);
+        await this.generateCustomEvolution(msg);
+        break;
+      }
+
+      case "evolution_choice": {
+        this.log(">>> EVOLUCIÓN DISPONIBLE <<<");
+        await this.chooseEvolution(msg.choices);
         break;
       }
 
@@ -1810,12 +2425,9 @@ ${exciting ? "Es un momento EMOCIONANTE." : "Comenta casual."}`;
               leaderVoteTimeout = setTimeout(() => {
                 if (Object.keys(leaderVotes).length > 0) {
                   this.resolveLeaderVote();
-                } else {
-                  tacticalLeader = "kentorian";
-                  this.log("nadie votó, kentorian es líder por defecto");
                 }
                 leaderVoteTimeout = null;
-              }, 15000);
+              }, 100000);
             }
           }
           this.voteForLeader();
@@ -2104,10 +2716,15 @@ Que sea COMPLETAMENTE ORIGINAL. Máximo 4-5 frases.${pastContext}`,
           if (text) {
             this.gmAction("event", { text });
             this.storyHistory.push(`INICIO: ${text.slice(0, 200)}`);
-            // Guardar backstory en archivo persistente para no repetir
             pastBackstories.push(text.slice(0, 150));
             try { fs.writeFileSync(BACKSTORY_FILE, JSON.stringify(pastBackstories.slice(-20), null, 2)); } catch {}
             this.log(`Backstory generado (${text.length} chars)`);
+            // Bitácora
+            const party = players.map(p => `**${p.username}** (${p.className})`).join(", ");
+            adventureLog.setBackstory(text);
+            adventureLog.chapter("El Inicio");
+            adventureLog.event(`Party: ${party}`);
+            adventureLog.narrate(text);
             // Esperar que lean el backstory + elijan líder táctico
             await new Promise(r => setTimeout(r, 12000));
             await this.waitForLeaderVote();
@@ -2126,6 +2743,8 @@ Que sea COMPLETAMENTE ORIGINAL. Máximo 4-5 frases.${pastContext}`,
     const fallback = "Cuatro aventureros se encuentran en una taberna en las afueras de un reino olvidado. Un anciano misterioso les ofrece un mapa hacia una mazmorra llena de tesoros, pero advierte que nadie ha regresado con vida. Sin pensarlo dos veces, aceptan.";
     this.gmAction("event", { text: fallback });
     this.storyHistory.push(`INICIO: ${fallback}`);
+    adventureLog.chapter("El Inicio");
+    adventureLog.narrate(fallback);
     await new Promise(r => setTimeout(r, 10000));
     await this.waitForLeaderVote();
     this.startEncounter();
@@ -2135,7 +2754,7 @@ Que sea COMPLETAMENTE ORIGINAL. Máximo 4-5 frases.${pastContext}`,
   async generateScenario() {
     const playerNames = PERSONALITIES.map(p => p.name).join(", ");
     const playerInfo = this.gameState?.players?.map(p => `${p.username} (${p.className} nv.${p.level || 1}, HP:${p.hp}/${p.maxHp})`).join(", ") || playerNames;
-    const level = Math.min(Math.floor(this.encounterIndex / 2) + 1, 4);
+    const level = Math.floor(this.encounterIndex / 2) + 1;
 
     const historyText = this.storyHistory.length > 0
       ? `HISTORIA HASTA AHORA:\n${this.storyHistory.slice(-5).map((h, i) => `${i + 1}. ${h}`).join("\n")}`
@@ -2168,19 +2787,22 @@ Crea enemigos temáticos que encajen con el escenario. NO repitas enemigos de en
 }
 
 TIPOS DE ENEMIGO (tier):
-- "normal": enemigos comunes (la mayoría)
-- "elite": enemigos especiales, más fuertes (⚡ máx 1 por encuentro, no siempre)
-- "boss": jefes finales (☠️ solo en nivel 4, solo 1)
-El servidor aplica multiplicadores según tier, así que los stats son la BASE.
+- "normal": enemigos comunes
+- "elite": enemigos especiales, más fuertes (⚡ el server multiplica stats)
+- "boss": jefes épicos (☠️ el server aplica x4 HP, x2.2 ATK, x1.8 DEF a la base)
 
-REGLAS de stats según nivel ${level}:
-- Nivel 1: HP 25-50, ATK 5-8, DEF 2-5, SPD 3-10. ${level <= 2 ? "2-3" : level === 3 ? "2" : "1"} enemigos. Todos "normal". Enemigos débiles (ratas, slimes, goblins)
-- Nivel 2: HP 50-90, ATK 8-12, DEF 5-8, SPD 5-10. 2-3 enemigos. Puede haber 1 "elite" entre ellos. Enemigos medios (esqueletos, lobos, bandidos)
-- Nivel 3: HP 80-130, ATK 12-18, DEF 8-12, SPD 5-9. 2 enemigos. 1 "elite" + 1 "normal". Enemigos fuertes (ogros, liches, elementales)
-- Nivel 4: HP 60-100, ATK 15-20, DEF 8-12, SPD 6-10. 1 "boss" (stats base, el server los multiplica x4 HP, x2.2 ATK, x1.8 DEF). Boss épico (dragón, demonio, nigromante)
+NIVEL ACTUAL: ${level}. Los stats BASE escalan así:
+- Nivel 1-2: HP 25-60, ATK 5-10, DEF 2-6. 2-3 enemigos "normal". Criaturas débiles (ratas, slimes, goblins)
+- Nivel 3-4: HP 50-100, ATK 10-16, DEF 5-10. 2 enemigos, 1 puede ser "elite". Criaturas fuertes (ogros, elementales, nigromantes)
+- Nivel 5-6: HP 80-140, ATK 14-22, DEF 8-14. 1-2 enemigos, 1 "elite" o "boss". Monstruos épicos (dragones jóvenes, hydras, liches)
+- Nivel 7-9: HP 100-200, ATK 18-30, DEF 12-18. 1-2 enemigos, siempre 1 "elite" o "boss". Criaturas legendarias (wyrms antiguos, archidemonios, titanes)
+- Nivel 10+: HP 150-300, ATK 25-40, DEF 15-25. 1 "boss" obligatorio. Entidades divinas/cósmicas (Dioses caídos, Leviatanes, Entidades del Vacío, Señores del Abismo)
+${level >= 5 ? "A ESTE NIVEL los encuentros deben ser ÉPICOS. Usa nombres intimidantes, descripciones grandiosas, ambientes legendarios." : ""}
+${level >= 8 ? "NIVEL MUY ALTO: Los enemigos son ENTIDADES CASI DIVINAS. Los escenarios deben ser dimensiones alternativas, picos del infierno, ciudades celestiales corrompidas." : ""}
+Cantidad de enemigos: ${level <= 2 ? "2-3" : level <= 5 ? "1-2" : "1"}
 
-ICON: usa un emoji temático para cada enemigo (🐺🦇🐉👹💀🕷️🧟🐍🦂🔥👻🧙‍♂️ etc)
-COLOR: usa un color hex para el nombre (#ff4444 rojo, #f59e0b ámbar, #a855f7 púrpura, #22c55e verde, #3b82f6 azul, etc)`,
+ICON: usa un emoji temático para cada enemigo (🐺🦇🐉👹💀🕷️🧟🐍🦂🔥👻🧙‍♂️🌋⚡👁️ etc)
+COLOR: usa un color hex para el nombre (#ff4444 rojo, #f59e0b ámbar, #a855f7 púrpura, #22c55e verde, #3b82f6 azul, #c084fc etc)`,
       },
     ];
 
@@ -2203,17 +2825,34 @@ COLOR: usa un color hex para el nombre (#ff4444 rojo, #f59e0b ámbar, #a855f7 p�
               if (parsed.scenario) {
                 this.log("JSON sin enemies, generando enemigos por nivel");
                 const defaultEnemies = this.generateDefaultEnemies(level);
-                return { scenario: parsed.scenario, narration: parsed.narration || "", enemies: defaultEnemies };
+                const enemyNames = defaultEnemies.map(e => e.name).join(" y ");
+                return { scenario: `${parsed.scenario} Aparecen ${enemyNames}.`, narration: parsed.narration || "", enemies: defaultEnemies };
               }
             } catch (jsonErr) {
               this.log(`JSON malformado: ${jsonErr.message}`);
             }
           }
-          // IA respondió texto libre sin JSON — usarlo como escenario narrativo
+          // IA respondió texto libre sin JSON válido — intentar extraer scenario del texto
           if (text.length > 20) {
-            this.log("IA respondió texto libre, usándolo como escenario");
-            const defaultEnemies = this.generateDefaultEnemies(level);
-            return { scenario: text.slice(0, 300), narration: "", enemies: defaultEnemies };
+            // Limpiar markdown/json wrappers
+            let cleanText = text.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
+            // Si parece JSON con "scenario", intentar extraer solo ese campo
+            const scenarioMatch = cleanText.match(/"scenario"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+            if (scenarioMatch) {
+              const scenarioText = scenarioMatch[1].replace(/\\"/g, '"').replace(/\\n/g, " ");
+              this.log("Extrajo scenario de JSON parcial");
+              const defaultEnemies = this.generateDefaultEnemies(level);
+              const enemyNames = defaultEnemies.map(e => e.name).join(" y ");
+              return { scenario: `${scenarioText.slice(0, 250)} De las sombras emergen ${enemyNames}.`, narration: "", enemies: defaultEnemies };
+            }
+            // Si no es JSON, usar como texto narrativo directamente
+            if (!cleanText.startsWith("{")) {
+              this.log("IA respondió texto libre, usándolo como escenario");
+              const defaultEnemies = this.generateDefaultEnemies(level);
+              const enemyNames = defaultEnemies.map(e => e.name).join(" y ");
+              return { scenario: `${cleanText.slice(0, 250)} De pronto aparecen ${enemyNames}.`, narration: "", enemies: defaultEnemies };
+            }
+            this.log("texto parece JSON malformado, reintentando...");
           }
           this.log("IA respondió pero respuesta inútil, reintentando...");
         }
@@ -2228,53 +2867,59 @@ COLOR: usa un color hex para el nombre (#ff4444 rojo, #f59e0b ámbar, #a855f7 p�
 
   // Generar enemigos por defecto cuando la IA no los incluyó
   generateDefaultEnemies(level) {
-    const enemies = [
-      // Nivel 1: todos normal
+    const enemyPools = [
+      // Nivel 1-2: débiles
       [
         { name: "Goblin", icon: "👺", color: "#22c55e" },
         { name: "Slime", icon: "🟢", color: "#4ade80" },
         { name: "Rata Gigante", icon: "🐀", color: "#a1a1aa" },
         { name: "Esqueleto", icon: "💀", color: "#e2e8f0" },
-        { name: "Murciélago", icon: "🦇", color: "#6366f1" },
+        { name: "Murciélago Gigante", icon: "🦇", color: "#6366f1" },
       ],
-      // Nivel 2: puede haber 1 elite
+      // Nivel 3-4: medios
       [
         { name: "Orco", icon: "👹", color: "#ef4444", tier: "elite" },
-        { name: "Bandido", icon: "🗡️", color: "#78716c" },
         { name: "Espectro", icon: "👻", color: "#a855f7" },
         { name: "Araña Venenosa", icon: "🕷️", color: "#7c3aed" },
         { name: "Lobo Sombrío", icon: "🐺", color: "#6366f1" },
-      ],
-      // Nivel 3: 1 elite + 1 normal
-      [
         { name: "Troll", icon: "🧌", color: "#84cc16", tier: "elite" },
-        { name: "Nigromante", icon: "🧙‍♂️", color: "#a855f7", tier: "elite" },
-        { name: "Quimera", icon: "🦁", color: "#ef4444" },
-        { name: "Golem", icon: "🪨", color: "#f59e0b" },
-        { name: "Basilisco", icon: "🐍", color: "#7c3aed" },
       ],
-      // Nivel 4: 1 boss
+      // Nivel 5-6: fuertes
       [
+        { name: "Nigromante", icon: "🧙‍♂️", color: "#a855f7", tier: "elite" },
+        { name: "Quimera", icon: "🦁", color: "#ef4444", tier: "elite" },
         { name: "Dragón Joven", icon: "🐉", color: "#c084fc", tier: "boss" },
-        { name: "Liche", icon: "☠️", color: "#22d3ee", tier: "boss" },
-        { name: "Demonio", icon: "😈", color: "#ff4444", tier: "boss" },
-        { name: "Hydra", icon: "🐍", color: "#c084fc", tier: "boss" },
-        { name: "Wyrm", icon: "🐉", color: "#f59e0b", tier: "boss" },
+        { name: "Golem de Obsidiana", icon: "🪨", color: "#f59e0b", tier: "elite" },
+        { name: "Basilisco", icon: "🐍", color: "#7c3aed", tier: "elite" },
+      ],
+      // Nivel 7-9: épicos
+      [
+        { name: "Wyrm Ancestral", icon: "🐉", color: "#f59e0b", tier: "boss" },
+        { name: "Archiliche", icon: "☠️", color: "#22d3ee", tier: "boss" },
+        { name: "Señor Demonio", icon: "😈", color: "#ff4444", tier: "boss" },
+        { name: "Hydra Primordial", icon: "🐍", color: "#c084fc", tier: "boss" },
+        { name: "Titán de Hierro", icon: "⚡", color: "#fbbf24", tier: "boss" },
+      ],
+      // Nivel 10+: divinos/cósmicos
+      [
+        { name: "Dios Caído", icon: "👁️", color: "#ff0000", tier: "boss" },
+        { name: "Leviatán del Vacío", icon: "🌊", color: "#0ea5e9", tier: "boss" },
+        { name: "Entidad del Abismo", icon: "🕳️", color: "#7c3aed", tier: "boss" },
+        { name: "Serafín Corrompido", icon: "🔥", color: "#fbbf24", tier: "boss" },
+        { name: "Avatar de la Muerte", icon: "💀", color: "#1e1e1e", tier: "boss" },
       ],
     ];
-    const stats = [
-      { hp: [30, 55], atk: [5, 8], def: [2, 5], spd: [3, 10] },
-      { hp: [55, 90], atk: [8, 13], def: [5, 8], spd: [5, 11] },
-      { hp: [80, 130], atk: [13, 18], def: [8, 12], spd: [4, 9] },
-      { hp: [60, 100], atk: [15, 20], def: [8, 12], spd: [6, 10] },
-    ];
-    const lvl = Math.min(level - 1, 3);
-    const s = stats[lvl];
-    const count = level <= 2 ? 2 + Math.floor(Math.random() * 2) : level === 3 ? 2 : 1;
-    const pool = [...enemies[lvl]].sort(() => Math.random() - 0.5);
-    const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+    // Scale stats dynamically based on level
+    const baseHp = 25 + level * 15;
+    const baseAtk = 4 + level * 3;
+    const baseDef = 2 + level * 2;
+    const baseSpd = 3 + Math.floor(level * 0.5);
+    const poolIdx = level <= 2 ? 0 : level <= 4 ? 1 : level <= 6 ? 2 : level <= 9 ? 3 : 4;
+    const count = level <= 2 ? 2 + Math.floor(Math.random() * 2) : level <= 5 ? 2 : 1;
+    const pool = [...enemyPools[poolIdx]].sort(() => Math.random() - 0.5);
+    const rand = (base, variance) => Math.floor(base + (Math.random() - 0.3) * variance);
     return pool.slice(0, count).map(e => ({
-      name: e.name, hp: rand(...s.hp), atk: rand(...s.atk), def: rand(...s.def), spd: rand(...s.spd),
+      name: e.name, hp: rand(baseHp, baseHp * 0.4), atk: rand(baseAtk, baseAtk * 0.3), def: rand(baseDef, baseDef * 0.3), spd: rand(baseSpd, 4),
       ...(e.tier ? { tier: e.tier } : {}),
       ...(e.icon ? { icon: e.icon } : {}),
       ...(e.color ? { color: e.color } : {}),
@@ -2286,8 +2931,8 @@ COLOR: usa un color hex para el nombre (#ff4444 rojo, #f59e0b ámbar, #a855f7 p�
     if (tacticalLeader) return; // ya hay líder
     this.log("Esperando elección de líder táctico...");
     const start = Date.now();
-    while (!tacticalLeader && (Date.now() - start) < 25000) {
-      await new Promise(r => setTimeout(r, 2000));
+    while (!tacticalLeader && (Date.now() - start) < 120000) {
+      await new Promise(r => setTimeout(r, 3000));
     }
     if (tacticalLeader) {
       this.log(`Líder táctico elegido: ${tacticalLeader}`);
@@ -2300,7 +2945,7 @@ COLOR: usa un color hex para el nombre (#ff4444 rojo, #f59e0b ámbar, #a855f7 p�
   async startEncounter() {
     if (this.combatActive) return;
 
-    const level = Math.min(Math.floor(this.encounterIndex / 2) + 1, 4);
+    const level = Math.floor(this.encounterIndex / 2) + 1;
     this.log(`=== ENCUENTRO ${this.encounterIndex + 1}: nivel ${level} ===`);
 
     // Intentar generar escenario con IA
@@ -2309,6 +2954,7 @@ COLOR: usa un color hex para el nombre (#ff4444 rojo, #f59e0b ámbar, #a855f7 p�
     if (scenario) {
       this.log(`Escenario generado por IA: ${scenario.scenario.slice(0, 80)}...`);
       this.currentScenario = scenario;
+      adventureLog.setScenario(scenario.scenario);
 
       // Narrar escenario
       this.gmAction("scenario", { text: scenario.scenario });
@@ -2337,9 +2983,13 @@ COLOR: usa un color hex para el nombre (#ff4444 rojo, #f59e0b ámbar, #a855f7 p�
         await new Promise(r => setTimeout(r, 1000));
       }
 
-      // Guardar en historial
+      // Guardar en historial + bitácora
       const enemyNames = scenario.enemies.map(e => e.name).join(", ");
       this.storyHistory.push(`Encuentro ${this.encounterIndex + 1}: ${scenario.scenario.slice(0, 100)} — Enemigos: ${enemyNames}`);
+      adventureLog.chapter(`Encuentro ${this.encounterIndex + 1}`);
+      adventureLog.narrate(scenario.scenario);
+      if (scenario.narration) adventureLog.narrate(scenario.narration);
+      adventureLog.combat(`Aparecen: ${scenario.enemies.map(e => `**${e.name}**${e.tier === "elite" ? " (Elite)" : e.tier === "boss" ? " (BOSS)" : ""}`).join(", ")}`);
     } else {
       // Fallback: escenario fijo + enemigos temáticos del mismo escenario
       this.log("IA no respondió, usando escenario fallback");
@@ -2408,7 +3058,7 @@ COLOR: usa un color hex para el nombre (#ff4444 rojo, #f59e0b ámbar, #a855f7 p�
     this.postCombatRunning = false;
     this.log("Combate terminado");
 
-    const level = Math.min(Math.floor(this.encounterIndex / 2) + 1, 4);
+    const level = Math.floor(this.encounterIndex / 2) + 1;
     const enemyCount = this.currentScenario?.enemies?.length || 2;
 
     // 1. Narrar victoria con contexto
@@ -2435,7 +3085,7 @@ COLOR: usa un color hex para el nombre (#ff4444 rojo, #f59e0b ámbar, #a855f7 p�
 
     // 3. Loot drop
     await new Promise(r => setTimeout(r, 3000));
-    this.gmAction("loot", { level: Math.min(level, 5), count: Math.min(enemyCount, 3), mode: "council" });
+    this.gmAction("loot", { level, count: Math.min(enemyCount, 3), mode: "council" });
 
     // 4. Esperar que terminen de votar loot (30s máx)
     await new Promise(r => setTimeout(r, 20000));
@@ -2450,7 +3100,13 @@ COLOR: usa un color hex para el nombre (#ff4444 rojo, #f59e0b ámbar, #a855f7 p�
       await this.startNPCDialog();
     }
 
-    // 7. Siguiente encuentro
+    // 7. Escribir capítulo narrativo de la bitácora
+    try {
+      await adventureLog.writeChapterNarrative();
+      this.log("Capítulo de bitácora escrito");
+    } catch (e) { this.log(`Error escribiendo bitácora: ${e.message}`); }
+
+    // 8. Siguiente encuentro
     this.encounterIndex++;
     this.log(`Próximo encuentro en 30-50 segundos...`);
     this.encounterTimer = setTimeout(() => this.startEncounter(), 30000 + Math.random() * 20000);
@@ -2573,10 +3229,16 @@ Las opciones deben ser variadas: una curiosa, una graciosa, una práctica.`,
         this.handleEnemyTurn(msg.enemy);
         break;
 
-      case "system":
-        // Solo loguear
-        this.log(`[sys] ${msg.text || ""}`);
+      case "system": {
+        const t = msg.text || "";
+        this.log(`[sys] ${t}`);
+        // Bitácora: registrar eventos importantes
+        if (/usa |ataca|defiende|esquiva/.test(t)) adventureLog.combat(t.replace(/[🎲⚔️✨💥🛡️👹⏰⏱️]/g, "").trim());
+        if (/derrotad|muere|cayó|eliminad/.test(t)) adventureLog.death(t.replace(/[💀☠️👻]/g, "").trim());
+        if (/nivel|subió|level up/i.test(t)) adventureLog.event(`🎉 ${t.replace(/[🎉⬆️]/g, "").trim()}`);
+        if (/recibe.*moneda|oro|gold/i.test(t)) adventureLog.loot(t.replace(/[💰]/g, "").trim());
         break;
+      }
 
       case "message":
         // Chat de jugadores - solo loguear
@@ -2715,9 +3377,9 @@ PERSONALITIES.forEach((p, i) => {
 });
 console.log("\nPresiona Ctrl+C para detener y guardar memorias.\n");
 
-// GM primero, luego jugadores
+// GM primero, luego jugadores con 15s de delay
 launchGM();
-PERSONALITIES.forEach((p, i) => launchAgent(p, 2000 + i * 2000));
+PERSONALITIES.forEach((p, i) => launchAgent(p, 15000 + i * 2000));
 
 // Guardar memorias al salir
 process.on("SIGINT", () => {
