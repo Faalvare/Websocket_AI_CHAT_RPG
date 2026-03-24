@@ -8,6 +8,7 @@ package-lock.json
 ai-memories.json
 rpg-memories.json
 rpg-backstories.json
+adventure-log.md
 
 # Discord chat exports
 dc_chat*.json

@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/rpg-awesome@0.2.0/css/rpg-awesome.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proton-engine/4.1.2/proton.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -99,8 +100,37 @@
       flex: 1; font-size: 0.82rem; color: #aaa;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       display: flex; align-items: center; gap: 6px;
+      cursor: pointer; border-radius: 6px; padding: 2px 6px;
+      transition: background 0.15s;
     }
+    #header-scenario:hover { background: rgba(255,255,255,0.05); }
     #header-scenario i.ra { color: #555; flex-shrink: 0; }
+
+    /* ── SCENARIO PANEL ── */
+    #scenario-panel {
+      position: fixed; bottom: 0; left: 0; right: 0; max-height: 45vh;
+      background: #111; border-top: 1px solid #7c3aed44;
+      display: flex; flex-direction: column; z-index: 101;
+      transform: translateY(100%); transition: transform 0.25s ease;
+    }
+    #scenario-panel.open { transform: translateY(0); }
+    #scenario-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-bottom: 1px solid #1e1e1e; flex-shrink: 0;
+    }
+    #scenario-header span { font-size: 0.85rem; font-weight: 600; color: #a78bfa; display: flex; align-items: center; gap: 8px; }
+    #scenario-close {
+      background: none; border: none; color: #555; font-size: 1rem;
+      cursor: pointer; padding: 2px 8px; border-radius: 6px;
+    }
+    #scenario-close:hover { background: #1e1e1e; color: #ccc; }
+    #scenario-body {
+      flex: 1; overflow-y: auto; padding: 16px; font-size: 0.82rem;
+      line-height: 1.7; color: #d1d5db;
+    }
+    #scenario-body .scenario-section { margin-bottom: 12px; }
+    #scenario-body .scenario-label { font-size: 0.7rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    #scenario-body .scenario-text { color: #e5e7eb; }
     #header-users { font-size: 0.78rem; color: #555; display: flex; align-items: center; gap: 5px; }
     #header-users i.ra { font-size: 0.8rem; }
 
@@ -289,6 +319,81 @@
     }
     #inventory-btn:hover { background: #252525; border-color: #7c3aed55; color: #c4b5fd; }
     #inventory-btn i.ra { font-size: 0.85rem; }
+
+    /* ── TRADE PANEL ── */
+    #trade-panel {
+      position: fixed; bottom: 0; left: 0; right: 0; max-height: 55vh;
+      background: #111; border-top: 1px solid #22c55e44;
+      display: flex; flex-direction: column; z-index: 102;
+      transform: translateY(100%); transition: transform 0.25s ease;
+    }
+    #trade-panel.open { transform: translateY(0); }
+    #trade-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-bottom: 1px solid #1e1e1e; flex-shrink: 0;
+    }
+    #trade-header span { font-size: 0.85rem; font-weight: 600; color: #22c55e; display: flex; align-items: center; gap: 8px; }
+    #trade-cancel-btn {
+      background: #1e1e1e; border: 1px solid #333; color: #ef4444; font-size: 0.72rem;
+      cursor: pointer; padding: 4px 10px; border-radius: 6px;
+    }
+    #trade-cancel-btn:hover { background: #2a1010; border-color: #ef444455; }
+    #trade-body { display: flex; flex: 1; min-height: 100px; }
+    .trade-side { flex: 1; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .trade-side-name { font-size: 0.8rem; font-weight: 700; color: #93c5fd; text-align: center; }
+    .trade-side-items {
+      flex: 1; min-height: 60px; background: #0a0a0a; border: 1px solid #1f2937;
+      border-radius: 6px; padding: 6px; display: flex; flex-wrap: wrap; gap: 4px;
+      align-content: flex-start;
+    }
+    .trade-item-chip {
+      background: #111827; border: 1px solid #1f2937; border-radius: 5px;
+      padding: 3px 8px; font-size: 0.68rem; cursor: pointer;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .trade-item-chip:hover { border-color: #ef4444; }
+    .trade-side-status { font-size: 0.68rem; text-align: center; padding: 2px; }
+    .trade-side-status.confirmed { color: #22c55e; font-weight: 600; }
+    .trade-side-status.waiting { color: #6b7280; }
+    .trade-divider { display: flex; align-items: center; color: #333; font-size: 1.2rem; padding: 0 4px; }
+    #trade-my-inventory { padding: 8px 16px; border-top: 1px solid #1e1e1e; }
+    .trade-inv-title { font-size: 0.68rem; color: #555; margin-bottom: 6px; }
+    #trade-inv-grid { display: flex; flex-wrap: wrap; gap: 4px; max-height: 80px; overflow-y: auto; }
+    #trade-actions { padding: 8px 16px; border-top: 1px solid #1e1e1e; display: flex; justify-content: center; }
+
+    /* ── ADVENTURE LOG PANEL ── */
+    #log-panel {
+      position: fixed; bottom: 0; left: 0; right: 0; height: 55vh;
+      background: #111; border-top: 1px solid #b4530944;
+      display: flex; flex-direction: column; z-index: 101;
+      transform: translateY(100%); transition: transform 0.25s ease;
+    }
+    #log-panel.open { transform: translateY(0); }
+    #log-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-bottom: 1px solid #1e1e1e; flex-shrink: 0;
+    }
+    #log-header span { font-size: 0.85rem; font-weight: 600; color: #f59e0b; display: flex; align-items: center; gap: 8px; }
+    #log-close, #log-refresh {
+      background: none; border: none; color: #555; font-size: 1rem;
+      cursor: pointer; padding: 2px 8px; border-radius: 6px;
+    }
+    #log-close:hover, #log-refresh:hover { background: #1e1e1e; color: #ccc; }
+    #log-body {
+      flex: 1; overflow-y: auto; padding: 16px; font-size: 0.78rem;
+      line-height: 1.6; color: #d1d5db; white-space: pre-wrap;
+    }
+    #log-body h1, #log-body h2 { color: #fbbf24; margin: 12px 0 6px 0; }
+    #log-body h1 { font-size: 1rem; border-bottom: 1px solid #333; padding-bottom: 4px; }
+    #log-body h2 { font-size: 0.88rem; color: #f59e0b; }
+    #log-body blockquote { border-left: 3px solid #f59e0b44; padding-left: 10px; color: #9ca3af; margin: 4px 0; }
+    #log-body hr { border: none; border-top: 1px solid #222; margin: 8px 0; }
+    #log-btn {
+      background: #1a1a1a; border: 1px solid #333; color: #aaa;
+      padding: 5px 12px; border-radius: 7px; cursor: pointer;
+      font-size: 0.72rem; display: inline-flex; align-items: center; gap: 5px;
+    }
+    #log-btn:hover { background: #252525; border-color: #b4530955; color: #f59e0b; }
 
     #inventory-panel {
       position: fixed; bottom: 0; left: 0; right: 0; height: 50vh;
@@ -542,13 +647,26 @@
     #turn-timer-label.urgent { color: #ef4444; }
 
     /* ── VOTE PANEL ── */
+    /* ── LOOT VOTE PANEL (slide-up like inventory) ── */
     #vote-panel {
-      position: fixed; bottom: 0; left: 0; right: 0;
-      background: #0d0d14; border-top: 2px solid #fbbf2455;
-      padding: 12px 18px; z-index: 90;
-      display: flex; flex-direction: column; gap: 10px;
+      position: fixed; bottom: 0; left: 0; right: 0; max-height: 45vh;
+      background: #111; border-top: 1px solid #fbbf2444;
+      display: flex; flex-direction: column; z-index: 100;
+      transform: translateY(100%); transition: transform 0.25s ease;
     }
+    #vote-panel.open { transform: translateY(0); }
     #vote-panel[hidden] { display: none !important; }
+    #vote-panel-top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-bottom: 1px solid #1e1e1e; flex-shrink: 0;
+    }
+    #vote-panel-top .vp-title { font-size: 0.85rem; font-weight: 600; color: #fbbf24; display: flex; align-items: center; gap: 8px; }
+    #vote-panel-close {
+      background: none; border: none; color: #555; font-size: 1rem;
+      cursor: pointer; padding: 2px 8px; border-radius: 6px;
+    }
+    #vote-panel-close:hover { background: #1e1e1e; color: #ccc; }
+    #vote-panel-body { padding: 12px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
     #vote-panel-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     #vote-item-info { display: flex; align-items: center; gap: 8px; flex: 1; }
     #vote-item-icon { font-size: 1.3rem; }
@@ -570,11 +688,42 @@
     .vote-btn.pass    { background: #1e1e1e; color: #9ca3af; border: 1px solid #333; }
     .vote-btn.council { background: #1e3a5f; color: #93c5fd; border: 1px solid #1e40af55; }
     #vote-voted-label { font-size: 0.72rem; color: #4ade80; display: none; align-items: center; gap: 4px; }
-    #vote-panel.minimized #vote-panel-header,
-    #vote-panel.minimized #vote-actions { display: none !important; }
-    #vote-min-btn { background: none; border: none; color: #555; font-size: 0.85rem; cursor: pointer; padding: 2px 6px; border-radius: 4px; position: absolute; right: 8px; top: 8px; }
-    #vote-min-btn:hover { background: #1a1a1a; color: #ccc; }
-    #vote-panel { position: relative; }
+    #vote-individual-votes {
+      display: flex; flex-wrap: wrap; gap: 6px; font-size: 0.72rem;
+    }
+    .vote-chip {
+      background: #111827; border: 1px solid #1f2937; border-radius: 6px;
+      padding: 4px 10px; display: flex; align-items: center; gap: 5px;
+    }
+    .vote-chip .voter { color: #93c5fd; font-weight: 600; }
+    .vote-chip .vote-arrow { color: #555; }
+    .vote-chip .vote-choice { color: #fbbf24; }
+    .vote-chip .vote-choice.need { color: #a78bfa; }
+    .vote-chip .vote-choice.greed { color: #f59e0b; }
+    .vote-chip .vote-choice.pass { color: #6b7280; }
+
+    /* ── LEADER VOTE PANEL (same slide-up style) ── */
+    #leader-vote-panel {
+      position: fixed; bottom: 0; left: 0; right: 0; max-height: 35vh;
+      background: #111; border-top: 1px solid #a78bfa44;
+      display: flex; flex-direction: column; z-index: 99;
+      transform: translateY(100%); transition: transform 0.25s ease;
+    }
+    #leader-vote-panel.open { transform: translateY(0); }
+    #leader-vote-panel[hidden] { display: none !important; }
+    #leader-vote-top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-bottom: 1px solid #1e1e1e; flex-shrink: 0;
+    }
+    #leader-vote-top .lv-title { font-size: 0.85rem; font-weight: 600; color: #a78bfa; display: flex; align-items: center; gap: 8px; }
+    #leader-vote-close {
+      background: none; border: none; color: #555; font-size: 1rem;
+      cursor: pointer; padding: 2px 8px; border-radius: 6px;
+    }
+    #leader-vote-close:hover { background: #1e1e1e; color: #ccc; }
+    #leader-vote-body { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+    #leader-vote-list { display: flex; flex-wrap: wrap; gap: 6px; font-size: 0.72rem; }
+    #leader-vote-result { font-size: 0.8rem; font-weight: 700; color: #fbbf24; }
     #loot-timer-bar { height: 3px; width: 100%; background: #1a1a1a; position: relative; overflow: hidden; }
     #loot-timer-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #fbbf24, #f59e0b); transform-origin: left; transition: none; }
     #loot-timer-fill.urgent { background: linear-gradient(90deg, #ef4444, #f87171); }
@@ -609,6 +758,10 @@
     .peek-inv-item { font-size: 0.74rem; background: #111; border-radius: 5px; padding: 5px 8px; display: flex; justify-content: space-between; align-items: center; }
     .peek-inv-item .item-meta { font-size: 0.63rem; color: #6b7280; }
     .peek-empty { font-size: 0.74rem; color: #374151; font-style: italic; }
+    .peek-skill-list { display: flex; flex-direction: column; gap: 4px; }
+    .peek-skill-item { font-size: 0.74rem; background: #111; border-radius: 5px; padding: 5px 8px; display: flex; justify-content: space-between; align-items: center; }
+    .peek-skill-name { color: #93c5fd; font-weight: 600; }
+    .peek-skill-desc { font-size: 0.63rem; color: #6b7280; margin-left: auto; }
     .peek-rel-list { display: flex; flex-direction: column; gap: 5px; }
     .peek-rel-item { display: flex; align-items: center; gap: 8px; font-size: 0.74rem; background: #0f0f17; border-radius: 6px; padding: 6px 8px; }
     .peek-rel-affinity { font-size: 0.85rem; min-width: 22px; text-align: center; }
@@ -643,9 +796,37 @@
     }
     .hit-flash { animation: hit-flash 0.38s ease both; }
     .dying     { animation: shake-die 0.65s ease-out both; pointer-events: none; }
+
+    /* ── SKILL PARTICLE CANVAS ── */
+    #fx-canvas {
+      position: fixed; top: 0; left: 0;
+      pointer-events: none; z-index: 9999;
+    }
+
+    /* ── BUMP (attacker) ── */
+    @keyframes bump {
+      0%   { transform: scale(1); }
+      30%  { transform: scale(1.15); }
+      60%  { transform: scale(0.95); }
+      100% { transform: scale(1); }
+    }
+    .bumping { animation: bump 0.35s ease-out both; }
+
+    /* ── SHAKE (target hit) ── */
+    @keyframes shake-hit {
+      0%   { transform: translate(0,0); }
+      15%  { transform: translate(-6px, 2px); }
+      30%  { transform: translate(6px, -2px); }
+      45%  { transform: translate(-4px, 1px); }
+      60%  { transform: translate(4px, -1px); }
+      75%  { transform: translate(-2px, 0); }
+      100% { transform: translate(0,0); }
+    }
+    .shaking { animation: shake-hit 0.4s ease-out both; }
   </style>
 </head>
 <body>
+<canvas id="fx-canvas"></canvas>
 
 <!-- LOGIN -->
 <div id="screen-login" class="screen active">
@@ -677,6 +858,17 @@
     <span id="header-users"><i class="ra ra-player"></i> 0 online</span>
   </div>
 
+  <!-- SCENARIO PANEL -->
+  <div id="scenario-panel">
+    <div id="scenario-header">
+      <span><i class="ra ra-scroll-unfurled"></i> Historia Actual</span>
+      <button id="scenario-close">✕</button>
+    </div>
+    <div id="scenario-body">
+      <div style="color:#444;font-style:italic">Sin escenario activo</div>
+    </div>
+  </div>
+
   <div id="body">
     <div id="sidebar-left">
       <div class="sidebar-title"><i class="ra ra-player"></i> Jugadores</div>
@@ -699,6 +891,7 @@
           <input id="input" placeholder="Escribe un mensaje o comando /gm ..." autocomplete="off" />
           <button class="btn secondary" type="button" id="inventory-btn"><i class="ra ra-backpack"></i> Inventario</button>
           <button type="button" id="shop-btn"><i class="ra ra-coins"></i> Tienda</button>
+          <button class="btn secondary" type="button" id="log-btn"><i class="ra ra-scroll-unfurled"></i> Bitácora</button>
           <button class="btn" type="submit"><i class="ra ra-plain-arrow"></i> Enviar</button>
         </form>
       </div>
@@ -745,6 +938,46 @@
     <div id="inventory-grid">
       <div style="color:#444;font-size:0.8rem;padding:8px;">Inventario vacío</div>
     </div>
+  </div>
+</div>
+
+<!-- TRADE PANEL -->
+<div id="trade-panel">
+  <div id="trade-header">
+    <span><i class="ra ra-cycle"></i> <span id="trade-title">Trade</span></span>
+    <button id="trade-cancel-btn">✕ Cancelar</button>
+  </div>
+  <div id="trade-body">
+    <div class="trade-side">
+      <div class="trade-side-name" id="trade-from-name">—</div>
+      <div class="trade-side-items" id="trade-from-items"></div>
+      <div class="trade-side-status" id="trade-from-status">Esperando...</div>
+    </div>
+    <div class="trade-divider"><i class="ra ra-cycle"></i></div>
+    <div class="trade-side">
+      <div class="trade-side-name" id="trade-to-name">—</div>
+      <div class="trade-side-items" id="trade-to-items"></div>
+      <div class="trade-side-status" id="trade-to-status">Esperando...</div>
+    </div>
+  </div>
+  <div id="trade-my-inventory" style="display:none">
+    <div class="trade-inv-title">Tu inventario — click para agregar:</div>
+    <div id="trade-inv-grid"></div>
+  </div>
+  <div id="trade-actions">
+    <button id="trade-confirm-btn" class="vote-btn need">✓ Confirmar</button>
+  </div>
+</div>
+
+<!-- ADVENTURE LOG PANEL -->
+<div id="log-panel">
+  <div id="log-header">
+    <span><i class="ra ra-scroll-unfurled"></i> Bitácora de Aventura</span>
+    <button id="log-refresh" title="Actualizar">🔄</button>
+    <button id="log-close">✕</button>
+  </div>
+  <div id="log-body">
+    <div style="color:#444;font-size:0.8rem;padding:8px;font-style:italic">Cargando...</div>
   </div>
 </div>
 
@@ -801,30 +1034,46 @@
     <div id="peek-vitals"></div>
     <div id="peek-stats-grid"></div>
     <div id="peek-equip-section"></div>
+    <div id="peek-skills-section"></div>
     <div id="peek-inv-section"></div>
     <div id="peek-relations-section"></div>
   </div>
 </div>
 
 <div id="vote-panel" hidden>
-  <button id="vote-min-btn" title="Minimizar">—</button>
-  <div id="loot-timer-bar"><div id="loot-timer-fill"></div></div>
-  <div id="vote-panel-header">
-    <div id="vote-item-info">
-      <span id="vote-item-icon"><i class="ra ra-gem"></i></span>
-      <div>
-        <div id="vote-item-name">—</div>
-        <div id="vote-item-meta">—</div>
-      </div>
-    </div>
-    <div id="vote-item-stats"></div>
-    <span id="vote-progress"><b id="vote-count">0</b>/<b id="vote-total">0</b> votos</span>
-    <span id="vote-breakdown" style="font-size:0.68rem;color:#555;margin-left:6px"></span>
+  <div id="vote-panel-top">
+    <span class="vp-title"><i class="ra ra-gem"></i> Loot</span>
+    <button id="vote-panel-close">✕</button>
   </div>
-  <div id="vote-actions">
-    <span class="vote-mode-label" id="vote-mode-label"></span>
-    <span id="vote-voted-label"><i class="ra ra-check"></i> Votaste</span>
-    <!-- buttons rendered dynamically -->
+  <div id="vote-panel-body">
+    <div id="loot-timer-bar"><div id="loot-timer-fill"></div></div>
+    <div id="vote-panel-header">
+      <div id="vote-item-info">
+        <span id="vote-item-icon"><i class="ra ra-gem"></i></span>
+        <div>
+          <div id="vote-item-name">—</div>
+          <div id="vote-item-meta">—</div>
+        </div>
+      </div>
+      <div id="vote-item-stats"></div>
+      <span id="vote-progress"><b id="vote-count">0</b>/<b id="vote-total">0</b> votos</span>
+    </div>
+    <div id="vote-individual-votes"></div>
+    <div id="vote-actions">
+      <span class="vote-mode-label" id="vote-mode-label"></span>
+      <span id="vote-voted-label"><i class="ra ra-check"></i> Votaste</span>
+    </div>
+  </div>
+</div>
+
+<div id="leader-vote-panel" hidden>
+  <div id="leader-vote-top">
+    <span class="lv-title"><i class="ra ra-crown"></i> Votación de Líder</span>
+    <button id="leader-vote-close">✕</button>
+  </div>
+  <div id="leader-vote-body">
+    <div id="leader-vote-list"></div>
+    <div id="leader-vote-result"></div>
   </div>
 </div>
 
@@ -841,6 +1090,7 @@
 
 <script>
 let ws, myUsername, isGM = false, myClass = null;
+const storyLog = { scenario: null, events: [], backstory: null };
 let isMyTurn = false, mySkills = [];
 let classesData = [];
 let gameState = { phase: "lobby", players: [], enemies: [], currentTurn: null };
@@ -1090,6 +1340,17 @@ function showCharacterSheet(data) {
     }).join("")}
   `;
 
+  // Skills
+  const skills = data.skills || [];
+  document.getElementById("peek-skills-section").innerHTML = `
+    <div class="peek-section-title">Habilidades</div>
+    ${skills.length === 0 ? `<div class="peek-empty">Sin habilidades</div>` :
+      `<div class="peek-skill-list">${skills.map(s => `<div class="peek-skill-item">
+        <span class="peek-skill-name">${escHtml(s.name)}</span>
+        <span class="peek-skill-desc">${escHtml(s.desc)}</span>
+      </div>`).join("")}</div>`}
+  `;
+
   // Inventory
   const inv = data.inventory || [];
   document.getElementById("peek-inv-section").innerHTML = `
@@ -1209,10 +1470,8 @@ document.getElementById("shop-min-btn").onclick = () => {
   document.getElementById("shop-min-btn").textContent =
     document.getElementById("shop-panel").classList.contains("minimized") ? "▲" : "—";
 };
-document.getElementById("vote-min-btn").onclick = () => {
-  const vp = document.getElementById("vote-panel");
-  vp.classList.toggle("minimized");
-  document.getElementById("vote-min-btn").textContent = vp.classList.contains("minimized") ? "▲" : "—";
+document.getElementById("vote-panel-close").onclick = () => {
+  document.getElementById("vote-panel").classList.remove("open");
 };
 document.getElementById("shop-btn").onclick = () => {
   document.getElementById("shop-gold-amount").textContent = myGold;
@@ -1409,9 +1668,14 @@ function handleMessage(msg) {
       break;
     case "gm_scenario":
       addRawMsg("gm-scenario", `${ra("ra-scroll-unfurled")} <span>${escHtml(msg.text)}</span>`);
+      storyLog.scenario = msg.text;
+      updateScenarioPanel();
       break;
     case "gm_event":
       addRawMsg("gm-event", `${ra("ra-pentagram")} <span>${escHtml(msg.text)}</span>`);
+      storyLog.events.push(msg.text);
+      if (storyLog.events.length > 20) storyLog.events.shift();
+      updateScenarioPanel();
       break;
     case "game_state":
       gameState = msg;
@@ -1452,27 +1716,51 @@ function handleMessage(msg) {
       break;
     case "loot_vote":
       hasVoted = false;
-      document.getElementById("vote-panel").classList.remove("minimized");
-      document.getElementById("vote-min-btn").textContent = "—";
       renderVotePanel(msg);
+      document.getElementById("vote-panel").hidden = false;
+      document.getElementById("vote-panel").classList.add("open");
       break;
     case "vote_update": {
       document.getElementById("vote-count").textContent = msg.votedCount;
       document.getElementById("vote-total").textContent = msg.totalCount;
-      const bkEl = document.getElementById("vote-breakdown");
-      if (bkEl) {
-        if (msg.breakdown) {
-          bkEl.innerHTML = `<span style="color:#7c3aed">N:${msg.breakdown.need}</span> <span style="color:#b45309">G:${msg.breakdown.greed}</span> <span style="color:#374151">P:${msg.breakdown.pass}</span>`;
-        } else if (msg.council) {
-          bkEl.innerHTML = Object.entries(msg.council).map(([u,c])=>`${escHtml(u)}:${c}`).join(" · ");
+      const ivEl = document.getElementById("vote-individual-votes");
+      if (ivEl) {
+        if (msg.councilVotes) {
+          // Council: show who voted for whom
+          ivEl.innerHTML = Object.entries(msg.councilVotes).map(([voter, votee]) =>
+            `<div class="vote-chip"><span class="voter">${escHtml(voter)}</span><span class="vote-arrow">→</span><span class="vote-choice">${escHtml(votee)}</span></div>`
+          ).join("");
+        } else if (msg.individualVotes) {
+          // Need/Greed/Pass individual votes
+          ivEl.innerHTML = Object.entries(msg.individualVotes).map(([voter, choice]) =>
+            `<div class="vote-chip"><span class="voter">${escHtml(voter)}</span><span class="vote-arrow">→</span><span class="vote-choice ${choice}">${choice}</span></div>`
+          ).join("");
+        } else if (msg.breakdown) {
+          ivEl.innerHTML = `<div class="vote-chip"><span class="vote-choice need">Need: ${msg.breakdown.need}</span></div>
+            <div class="vote-chip"><span class="vote-choice greed">Greed: ${msg.breakdown.greed}</span></div>
+            <div class="vote-chip"><span class="vote-choice pass">Pass: ${msg.breakdown.pass}</span></div>`;
         }
       }
       break;
     }
     case "loot_awarded":
       stopLootTimer();
-      document.getElementById("vote-panel").hidden = true;
+      document.getElementById("vote-panel").classList.remove("open");
+      setTimeout(() => { document.getElementById("vote-panel").hidden = true; }, 300);
       hasVoted = false;
+      break;
+    case "leader_vote_update":
+      renderLeaderVotePanel(msg);
+      break;
+    case "trade_open":
+      openTradePanel(msg);
+      break;
+    case "trade_update":
+      updateTradePanel(msg);
+      break;
+    case "trade_complete":
+    case "trade_cancelled":
+      closeTradePanel(msg);
       break;
     case "loot_timer_start":
       startLootTimer(msg.duration);
@@ -1492,6 +1780,10 @@ function handleMessage(msg) {
     case "combat_hit":
       if (msg.aoe) animateLungeAoe(msg.attacker, msg.atkIsEnemy, msg.targets);
       else animateLunge(msg.attacker, msg.atkIsEnemy, msg.target, msg.tgtIsEnemy);
+      playCombatFX(msg);
+      break;
+    case "skill_effect":
+      playSelfFX(msg);
       break;
     case "unit_died":
       animateEnemyDeath(msg.name);
@@ -1543,7 +1835,10 @@ function handleMessage(msg) {
       closeDialog();
       closeShop();
       document.getElementById("shop-btn").classList.remove("visible");
+      document.getElementById("vote-panel").classList.remove("open");
       document.getElementById("vote-panel").hidden = true;
+      document.getElementById("leader-vote-panel").classList.remove("open");
+      document.getElementById("leader-vote-panel").hidden = true;
       document.getElementById("inventory-panel").classList.remove("open");
       document.getElementById("duel-hud").hidden = true;
       document.getElementById("duel-challenge-banner").hidden = true;
@@ -1818,6 +2113,64 @@ document.getElementById("inventory-close").onclick = () => {
   document.getElementById("inventory-panel").classList.remove("open");
 };
 
+// Adventure log
+async function loadAdventureLog() {
+  const body = document.getElementById("log-body");
+  try {
+    const res = await fetch("/adventure-log");
+    const md = await res.text();
+    // Simple markdown to HTML
+    body.innerHTML = md
+      .replace(/^# (.+)$/gm, "<h1>$1</h1>")
+      .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+      .replace(/^> (.+)$/gm, "<blockquote>$1</blockquote>")
+      .replace(/^---$/gm, "<hr>")
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/^(.+)$/gm, (line) => {
+        if (line.startsWith("<")) return line;
+        return `<div>${line}</div>`;
+      });
+    body.scrollTop = body.scrollHeight;
+  } catch (e) {
+    body.innerHTML = "<div style='color:#555;font-style:italic'>No se pudo cargar la bitácora</div>";
+  }
+}
+document.getElementById("log-btn").onclick = () => {
+  const panel = document.getElementById("log-panel");
+  const opening = !panel.classList.contains("open");
+  panel.classList.toggle("open");
+  if (opening) loadAdventureLog();
+};
+document.getElementById("log-close").onclick = () => {
+  document.getElementById("log-panel").classList.remove("open");
+};
+document.getElementById("log-refresh").onclick = loadAdventureLog;
+
+// Scenario panel
+function updateScenarioPanel() {
+  const body = document.getElementById("scenario-body");
+  let html = "";
+  if (storyLog.scenario) {
+    html += `<div class="scenario-section"><div class="scenario-label">Escenario</div><div class="scenario-text">${escHtml(storyLog.scenario)}</div></div>`;
+  }
+  if (storyLog.events.length > 0) {
+    html += `<div class="scenario-section"><div class="scenario-label">Eventos</div>`;
+    for (const ev of storyLog.events) {
+      html += `<div class="scenario-text" style="margin-bottom:6px;padding-left:8px;border-left:2px solid #7c3aed33">${escHtml(ev)}</div>`;
+    }
+    html += `</div>`;
+  }
+  if (!html) html = `<div style="color:#444;font-style:italic">Sin escenario activo</div>`;
+  body.innerHTML = html;
+  body.scrollTop = body.scrollHeight;
+}
+document.getElementById("header-scenario").onclick = () => {
+  document.getElementById("scenario-panel").classList.toggle("open");
+};
+document.getElementById("scenario-close").onclick = () => {
+  document.getElementById("scenario-panel").classList.remove("open");
+};
+
 // Unequip buttons
 document.querySelectorAll(".equip-unequip-btn").forEach(btn => {
   btn.onclick = () => {
@@ -2043,6 +2396,12 @@ document.getElementById("form").onsubmit = (e) => {
     return;
   }
 
+  if (val.startsWith("/trade ")) {
+    const target = val.slice(7).trim();
+    if (target) ws.send(JSON.stringify({ type: "trade_request", target }));
+    return;
+  }
+
   if (val.startsWith("/prefix ") || val === "/prefix") {
     const v = val.slice(8).trim();
     ws.send(JSON.stringify({ type: "set_title", prefix: v }));
@@ -2226,6 +2585,264 @@ function showWelcome(isGM, hasGM) {
         • Los enemigos pueden soltar botín — revisa el banner verde${noGMWarning}
       </span>
     `);
+  }
+}
+
+// ── LEADER VOTE PANEL ──────────────────────────────────────────────────────
+
+document.getElementById("leader-vote-close").onclick = () => {
+  document.getElementById("leader-vote-panel").classList.remove("open");
+};
+
+// ── TRADE SYSTEM ──────────────────────────────────────────────────────────────
+
+let activeTradeId = null;
+
+function openTradePanel(msg) {
+  activeTradeId = msg.tradeId;
+  const panel = document.getElementById("trade-panel");
+  document.getElementById("trade-title").textContent = `Trade: ${msg.from} ↔ ${msg.to}`;
+  document.getElementById("trade-from-name").textContent = msg.from;
+  document.getElementById("trade-to-name").textContent = msg.to;
+  document.getElementById("trade-from-items").innerHTML = "";
+  document.getElementById("trade-to-items").innerHTML = "";
+  document.getElementById("trade-from-status").textContent = "Esperando...";
+  document.getElementById("trade-from-status").className = "trade-side-status waiting";
+  document.getElementById("trade-to-status").textContent = "Esperando...";
+  document.getElementById("trade-to-status").className = "trade-side-status waiting";
+
+  // Show my inventory if I'm part of this trade
+  const myInv = document.getElementById("trade-my-inventory");
+  const actions = document.getElementById("trade-actions");
+  const imInvolved = (msg.from === myUsername || msg.to === myUsername);
+  myInv.style.display = imInvolved ? "block" : "none";
+  actions.style.display = imInvolved ? "flex" : "none";
+  if (imInvolved) renderTradeInventory();
+
+  panel.classList.add("open");
+}
+
+function renderTradeInventory() {
+  const grid = document.getElementById("trade-inv-grid");
+  grid.innerHTML = "";
+  for (const item of myInventory) {
+    const chip = document.createElement("div");
+    chip.className = "trade-item-chip";
+    chip.innerHTML = `<span class="${rarityClass(item.rarity)}">${escHtml(item.name)}</span>`;
+    chip.onclick = () => {
+      if (activeTradeId) ws.send(JSON.stringify({ type: "trade_add_item", tradeId: activeTradeId, itemId: item.id }));
+    };
+    grid.appendChild(chip);
+  }
+}
+
+function renderTradeItems(containerId, items, canRemove) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = "";
+  if (items.length === 0) {
+    el.innerHTML = "<div style='color:#374151;font-size:0.65rem;padding:4px;font-style:italic'>Sin items</div>";
+    return;
+  }
+  for (const item of items) {
+    const chip = document.createElement("div");
+    chip.className = "trade-item-chip";
+    const stats = Object.entries(item.stats || {}).filter(([,v]) => v).map(([k,v]) => `${k}:${v>0?"+":""}${v}`).join(" ");
+    chip.innerHTML = `<span class="${rarityClass(item.rarity)}">${escHtml(item.name)}</span>${stats ? `<span style="color:#4b5563;font-size:0.6rem">${stats}</span>` : ""}`;
+    if (canRemove) {
+      chip.title = "Click para quitar";
+      chip.onclick = () => {
+        if (activeTradeId) ws.send(JSON.stringify({ type: "trade_remove_item", tradeId: activeTradeId, itemId: item.id }));
+      };
+    }
+    el.appendChild(chip);
+  }
+}
+
+function updateTradePanel(msg) {
+  if (msg.tradeId !== activeTradeId) return;
+  const imFrom = msg.from === myUsername;
+  const imTo = msg.to === myUsername;
+  renderTradeItems("trade-from-items", msg.fromItems, imFrom);
+  renderTradeItems("trade-to-items", msg.toItems, imTo);
+
+  const fs = document.getElementById("trade-from-status");
+  fs.textContent = msg.fromConfirm ? "✓ Confirmado" : "Esperando...";
+  fs.className = `trade-side-status ${msg.fromConfirm ? "confirmed" : "waiting"}`;
+  const ts = document.getElementById("trade-to-status");
+  ts.textContent = msg.toConfirm ? "✓ Confirmado" : "Esperando...";
+  ts.className = `trade-side-status ${msg.toConfirm ? "confirmed" : "waiting"}`;
+
+  if (imFrom || imTo) renderTradeInventory();
+}
+
+function closeTradePanel(msg) {
+  activeTradeId = null;
+  document.getElementById("trade-panel").classList.remove("open");
+}
+
+document.getElementById("trade-confirm-btn").onclick = () => {
+  if (activeTradeId) ws.send(JSON.stringify({ type: "trade_confirm", tradeId: activeTradeId }));
+};
+document.getElementById("trade-cancel-btn").onclick = () => {
+  if (activeTradeId) ws.send(JSON.stringify({ type: "trade_cancel", tradeId: activeTradeId }));
+};
+
+function renderLeaderVotePanel(msg) {
+  const panel = document.getElementById("leader-vote-panel");
+  const list = document.getElementById("leader-vote-list");
+  const result = document.getElementById("leader-vote-result");
+
+  panel.hidden = false;
+  panel.classList.add("open");
+
+  list.innerHTML = Object.entries(msg.votes || {}).map(([voter, votee]) =>
+    `<div class="vote-chip"><span class="voter">${escHtml(voter)}</span><span class="vote-arrow">→</span><span class="vote-choice">${escHtml(votee)}</span></div>`
+  ).join("");
+
+  if (msg.phase === "done") {
+    result.textContent = `👑 ${msg.result} es el Líder Táctico`;
+    setTimeout(() => { panel.classList.remove("open"); }, 10000);
+  } else {
+    result.textContent = "Votando...";
+  }
+}
+
+// ── PROTON PARTICLE FX SYSTEM ──────────────────────────────────────────────
+
+const fxCanvas = document.getElementById("fx-canvas");
+const fxCtx = fxCanvas.getContext("2d");
+let proton = null, fxRenderer = null;
+
+function resizeFxCanvas() {
+  fxCanvas.width = window.innerWidth;
+  fxCanvas.height = window.innerHeight;
+  fxCanvas.style.width = window.innerWidth + "px";
+  fxCanvas.style.height = window.innerHeight + "px";
+}
+
+function initProton() {
+  resizeFxCanvas();
+  proton = new Proton();
+  fxRenderer = new Proton.CanvasRenderer(fxCanvas);
+  fxRenderer.onProtonUpdate = () => {
+    fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+  };
+  proton.addRenderer(fxRenderer);
+  function tick() { requestAnimationFrame(tick); if (proton) proton.update(); }
+  tick();
+}
+window.addEventListener("resize", resizeFxCanvas);
+initProton();
+
+// Skill FX configs: { colors, count, life, speed, radius, gravity, special }
+const SKILL_FX = {
+  fireball:     { colors: ["#ff4500","#ff8c00","#ffcc00","#ff2200"], count: [25,40], life: [0.4,0.8], speed: [3,6], radius: [2,6], gravity: -0.5 },
+  arcane_burst: { colors: ["#a855f7","#7c3aed","#c084fc","#e9d5ff"], count: [35,55], life: [0.5,1.0], speed: [4,8], radius: [2,8], gravity: 0 },
+  ice_shield:   { colors: ["#67e8f9","#22d3ee","#a5f3fc","#ffffff"], count: [20,30], life: [0.6,1.2], speed: [1,3], radius: [2,5], gravity: 0, spin: true },
+  holy_strike:  { colors: ["#fbbf24","#fde68a","#fffbeb","#ffffff"], count: [20,35], life: [0.4,0.9], speed: [2,5], radius: [2,6], gravity: -1 },
+  heal:         { colors: ["#34d399","#6ee7b7","#a7f3d0","#ffffff"], count: [15,25], life: [0.6,1.2], speed: [1,3], radius: [2,4], gravity: -1.5 },
+  blessing:     { colors: ["#fbbf24","#f59e0b","#fde68a","#fffbeb"], count: [12,20], life: [0.5,1.0], speed: [1,2], radius: [1,3], gravity: -1 },
+  poison:       { colors: ["#22c55e","#16a34a","#86efac","#4ade80"], count: [15,25], life: [0.5,1.0], speed: [1,3], radius: [2,5], gravity: -0.8 },
+  backstab:     { colors: ["#ef4444","#dc2626","#991b1b","#ffffff"], count: [15,25], life: [0.2,0.5], speed: [5,10], radius: [1,3], gravity: 0 },
+  slash:        { colors: ["#d1d5db","#9ca3af","#ffffff","#f3f4f6"], count: [10,18], life: [0.2,0.4], speed: [4,8], radius: [1,3], gravity: 0 },
+  shield_bash:  { colors: ["#a78bfa","#8b5cf6","#c4b5fd","#ffffff"], count: [12,20], life: [0.3,0.5], speed: [3,6], radius: [2,4], gravity: 0.5 },
+  berserk:      { colors: ["#ef4444","#b91c1c","#dc2626","#ff0000"], count: [25,40], life: [0.4,0.8], speed: [2,5], radius: [2,6], gravity: 0 },
+  smoke_bomb:   { colors: ["#6b7280","#9ca3af","#4b5563","#374151"], count: [30,50], life: [0.8,1.5], speed: [1,3], radius: [3,8], gravity: -0.3 },
+  attack:       { colors: ["#d1d5db","#ffffff","#fbbf24"], count: [8,12], life: [0.2,0.4], speed: [3,6], radius: [1,3], gravity: 0 },
+};
+
+function emitSkillFX(x, y, skillKey) {
+  if (!proton || !x || !y) return;
+  const cfg = SKILL_FX[skillKey] || SKILL_FX.attack;
+  const emitter = new Proton.Emitter();
+  emitter.rate = new Proton.Rate(new Proton.Span(cfg.count[0], cfg.count[1]), 0.05);
+  emitter.addInitialize(new Proton.Mass(1));
+  emitter.addInitialize(new Proton.Radius(new Proton.Span(cfg.radius[0], cfg.radius[1])));
+  emitter.addInitialize(new Proton.Life(new Proton.Span(cfg.life[0], cfg.life[1])));
+  emitter.addInitialize(new Proton.Velocity(new Proton.Span(cfg.speed[0], cfg.speed[1]), new Proton.Span(0, 360), "polar"));
+  emitter.addInitialize(new Proton.Position(new Proton.PointZone(x, y)));
+  const c = cfg.colors;
+  emitter.addBehaviour(new Proton.Color(c[Math.floor(Math.random()*c.length)], c[Math.floor(Math.random()*c.length)]));
+  emitter.addBehaviour(new Proton.Alpha(1, 0));
+  emitter.addBehaviour(new Proton.Scale(1, 0.3));
+  if (cfg.gravity) emitter.addBehaviour(new Proton.Gravity(cfg.gravity));
+  emitter.addBehaviour(new Proton.RandomDrift(3, 3, 0.05));
+  emitter.p.x = x;
+  emitter.p.y = y;
+  emitter.emit("once");
+  proton.addEmitter(emitter);
+  setTimeout(() => { try { proton.removeEmitter(emitter); } catch(e){} }, 2000);
+}
+
+function getElCenter(el) {
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+
+// ── BUMP + SHAKE ANIMATIONS ────────────────────────────────────────────────
+
+function applyBump(el) {
+  if (!el) return;
+  el.classList.remove("bumping");
+  void el.offsetWidth;
+  el.classList.add("bumping");
+  el.addEventListener("animationend", () => el.classList.remove("bumping"), { once: true });
+}
+
+function applyShake(el) {
+  if (!el) return;
+  el.classList.remove("shaking");
+  void el.offsetWidth;
+  el.classList.add("shaking");
+  el.addEventListener("animationend", () => el.classList.remove("shaking"), { once: true });
+}
+
+// ── INTEGRATED COMBAT FX ───────────────────────────────────────────────────
+
+function playCombatFX(msg) {
+  const skill = msg.skill || "attack";
+  const atkEl = getCardEl(msg.attacker, msg.atkIsEnemy);
+
+  // Bump attacker
+  applyBump(atkEl);
+
+  if (msg.aoe) {
+    // AOE: particles + shake on each target
+    const targets = (msg.targets || []).map(n => getCardEl(n, true)).filter(Boolean);
+    setTimeout(() => {
+      for (const tEl of targets) {
+        const pos = getElCenter(tEl);
+        if (pos) emitSkillFX(pos.x, pos.y, skill);
+        applyShake(tEl);
+      }
+    }, 133);
+  } else {
+    // Single target
+    const tgtEl = getCardEl(msg.target, msg.tgtIsEnemy);
+    setTimeout(() => {
+      const pos = getElCenter(tgtEl);
+      if (pos) emitSkillFX(pos.x, pos.y, skill);
+      applyShake(tgtEl);
+    }, 133);
+  }
+}
+
+function playSelfFX(msg) {
+  const skill = msg.skill || "blessing";
+  const el = getCardEl(msg.caster, false) || getCardEl(msg.target, false);
+  if (!el) return;
+  applyBump(el);
+  const pos = getElCenter(el);
+  if (pos) emitSkillFX(pos.x, pos.y, skill);
+  if (msg.target && msg.target !== msg.caster) {
+    const tEl = getCardEl(msg.target, false);
+    if (tEl) {
+      setTimeout(() => {
+        const tPos = getElCenter(tEl);
+        if (tPos) emitSkillFX(tPos.x, tPos.y, skill);
+      }, 200);
+    }
   }
 }
 </script>

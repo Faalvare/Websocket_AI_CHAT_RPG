@@ -11,7 +11,7 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-const HOST = "ws://192.168.0.205:3000";
+const HOST = process.env.HOST || "ws://192.168.0.205:3000";
 const USERNAME = process.argv[2] || "redditor";
 
 const GROQ_KEY = process.env.GROQ_KEY_ALT || process.env.GROQ_KEY || "";

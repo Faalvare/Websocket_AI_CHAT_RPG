@@ -14,7 +14,7 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-const HOST = "ws://192.168.0.205:3000";
+const HOST = process.env.HOST || "ws://192.168.0.205:3000";
 const MEMORY_FILE = path.join(__dirname, "ai-memories.json");
 
 // Providers (APIs gratuitas con fallback)
